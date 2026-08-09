@@ -1,38 +1,85 @@
-# Sky Eye — 仿 Astrometrica 天文图像处理软件
+# Sky Eye（天空之眼）
 
-基于 Tauri v2 (Rust + React) 的跨平台天文图像处理软件，用于小行星/彗星的搜索、测量和报告。
+**Sky Eye** 是一款仿 Astrometrica 的跨平台天文图像处理软件，用于小行星/彗星的 CCD 观测数据处理——从底片解算、Blink 比较、目标测量到生成 MPC 观测报告。
 
-## 文档索引
+## 功能特性
 
-| 文件                                                        | 内容                                 |
-| ----------------------------------------------------------- | ------------------------------------ |
-| [01-requirements.md](docs/01-requirements.md)               | 功能需求和非功能需求                 |
-| [02-architecture.md](docs/02-architecture.md)               | 系统架构、模块划分、数据流、技术选型 |
-| [03-development-plan.md](docs/03-development-plan.md)       | 开发环境搭建、核心算法说明、测试策略 |
-| [04-roadmap.md](docs/04-roadmap.md)                         | 分阶段实施路线图与当前状态           |
-| [05-design.md](docs/05-design.md)                           | 界面与视觉设计                       |
-| [06-mvp.md](docs/06-mvp.md)                                 | MVP 边界、验收标准与交付顺序         |
-| [07-technical-decisions.md](docs/07-technical-decisions.md) | 科学计算与依赖技术决策               |
+### 图像加载与显示
 
-## 项目名
+- 同时打开多张 FITS 图像（`.fits` / `.fit` / `.fts`）
+- 自动读取 FITS 头信息：目标名称、RA/Dec、曝光时长、滤镜、观测时间、焦距、像元大小、像素尺度、旋转与镜像
+- ZScale 自动拉伸，支持线性（Linear）与 Asinh 两种显示模式
+- 反色显示、适应窗口、帧列表快速切换
 
-**Sky Eye** — 天空之眼。仓库与包标识统一使用 `sky-eye`。
+### 底片解算（Data Reduction）
 
-## 开发检查
+- 自动星点检测与背景估计
+- 在线查询 VizieR Gaia DR3 参考星表，并自行星历元传播
+- WCS 世界坐标求解：输出中心坐标、像素尺度、旋转角与 RMS 残差
+- 整组图像批量归算，逐帧失败隔离，自动继承上一帧求解初值
+- 自动解算失败时支持**人工校准**：叠加 Gaia 参考星圆圈，手动调整平移、比例、旋转和镜像后自动精化
+- 基于 ATLAS REFCAT2 的自动光度定标（零点与颜色项）
 
-```bash
-pnpm install --frozen-lockfile
-pnpm check
-```
+### Blink 闪烁比较
 
-`pnpm check` 会依次执行 Prettier 格式检查、ESLint、应用版本一致性检查、前端生产构建、Rustfmt、Clippy 和 Rust 测试。需要自动修正前端格式时运行 `pnpm format`，Rust 格式化使用 `pnpm rust:fmt`。
+- 在多帧图像间循环播放，闪烁速度可调
+- 快捷键：`Space` 播放/暂停、`←` `→` 切换帧、`↑` `↓` 调整速度
 
-## CI/CD
+### 目标测量
 
-- 普通分支推送和 Pull Request 会触发 CI。
-- 发布前需同步修改 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本号。
-- 推送与版本一致的标签（例如 `v0.1.0`）会触发发布流程，构建 Windows x64、Linux x64、macOS Apple Silicon 和 macOS Intel 安装包。
-- 所有平台构建成功后，工作流才会正式发布 GitHub Release。
-- 发布仓库为 `MrSibe/sky-eye`；Tauri updater 会随 Release 生成已签名更新包和 `latest.json`，客户端在“设置 > 关于”中检查、下载并安装更新。
-- 首次发布前，将本机 `C:\Users\MrSibe\.tauri\sky-eye.key` 的完整内容保存为仓库的 GitHub Actions Secret `TAURI_SIGNING_PRIVATE_KEY`。私钥不得提交到仓库；公钥已嵌入 `src-tauri/tauri.conf.json`。
-- 当前本地私钥未设置密码。如果以后轮换为带密码的密钥，还需创建 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` Secret，并同步替换客户端公钥；已发布客户端无法使用丢失或不匹配的密钥更新。
+- 点击标记可疑目标，支持二维 PSF 拟合与孔径质心两种测量方式
+- 输出 RA/Dec、流量、SNR、FWHM、椭圆率与测量不确定度
+- 光度定标后获得星等（含误差与波段）
+- 测量列表：确认、重命名、删除，支持 MPC trkSub 命名规则校验
+
+### 已知天体标注
+
+- 下载并自动更新 MPCORB 轨道数据库
+- 一次计算整组图像中已知小行星的位置并叠加显示，方便区分已知对象与新发现候选
+
+### Tracklet 匹配
+
+- 将测量结果与本地 MPCORB 轨道数据库匹配，返回候选天体、最大 O-C 残差与移动速度
+
+### 观测报告导出
+
+- 按 **ADES 2022 PSV** 或 **MPC 80-column** 标准格式生成观测报告
+- 内置预览与校验，自动集成观测站、观测者/测量者、望远镜配置与测量信息
+
+### 设置与更新
+
+- 完整配置：观测站（MPC 编号、经纬度、观测者、望远镜）、仪器（焦距、像元、镜像）、归算参数、报告精度
+- 内置自动更新，在「设置 > 关于」中检查、下载并安装新版
+
+## 下载与安装
+
+Sky Eye 支持 **Windows x64**、**macOS（Apple Silicon 与 Intel）** 与 **Linux x64**。
+
+前往 [GitHub Releases](https://github.com/MrSibe/sky-eye/releases) 下载对应平台的安装包：
+
+| 平台        | 安装包                                       |
+| ----------- | -------------------------------------------- |
+| Windows x64 | 安装向导（NSIS）或 MSI，双击运行即可         |
+| macOS       | `.dmg` 镜像，Apple Silicon 与 Intel 分别下载 |
+| Linux x64   | `.deb` / `.rpm` / AppImage                   |
+
+**系统要求**：Windows 10/11、macOS 或 Linux（x86_64）。典型 4K×4K FITS 图像可在 1 秒内完成加载与拉伸。
+
+安装后，可通过「设置 > 关于」检查软件更新，新版本会自动下载并安装。
+
+## 快速上手
+
+1. **打开图像**：点击「打开图像」，选择一组同一目标的 FITS 文件。
+2. **归算**：点击「归算」，软件自动检测星点、匹配 Gaia DR3 星表并求解 WCS。若自动解算失败，可进入人工校准模式手动调整。
+3. **寻找可疑目标**：在显示面板开启 Blink 闪烁，观察多帧间移动的亮点。
+4. **标记目标**：点击「标记可疑目标」，在图像上点击移动天体，确认测量结果。
+5. **匹配与报告**：在可疑目标列表中执行 Tracklet 匹配，或直接「导出报告」，生成 ADES 或 MPC 格式的观测报告。
+
+## 联网与数据说明
+
+- **离线可用**：图像处理与底片解算完全离线运行。
+- **需要联网**：VizieR 参考星表查询（Gaia DR3、ATLAS REFCAT2）与 MPCORB 轨道数据库下载。
+
+## 反馈
+
+Sky Eye 目前处于早期版本（v0.1.0），功能正在持续开发中。如遇问题或有功能建议，欢迎在 [GitHub Issues](https://github.com/MrSibe/sky-eye/issues) 提交反馈。
