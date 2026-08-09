@@ -359,7 +359,7 @@ pub fn load_fits(path: &str) -> Result<FitsData, String> {
     log::debug!(
         "[sky-eye]   pixels.len()={}, first 5: {:?}",
         pixels.len(),
-        &pixels.iter().take(5).copied().collect::<Vec<_>>()
+        pixels.iter().take(5).copied().collect::<Vec<_>>()
     );
 
     let mut min = f32::MAX;
