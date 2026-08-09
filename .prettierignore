@@ -1,0 +1,10 @@
+dist/
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/tests/golden/
+pnpm-lock.yaml
+*.fits
+*.fit
+*.fts
+*.sqlite*

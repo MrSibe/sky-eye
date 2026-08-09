@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-sky-canvas: #111111;
+  --color-sky-canvas-soft: #0d0d0d;
+  --color-sky-canvas-soft-2: #0a0a0a;
+  --color-sky-canvas-viewer: #000000;
+  --color-sky-ink: #ededed;
+  --color-sky-body: #a1a1a1;
+  --color-sky-mute: #666666;
+  --color-sky-hairline: #2a2a2a;
+  --color-sky-hairline-strong: #404040;
+  --color-sky-primary: #0070f3;
+  --color-sky-primary-hover: #0058cc;
+  --color-sky-control: #171717;
+  --color-sky-control-hover: #1f1f1f;
+  --color-sky-overlay: #141414;
+  --color-sky-accent-green: #38d9a9;
+  --color-sky-accent-yellow: #ffd43b;
+  --color-sky-accent-red: #ff6b6b;
+  --color-sky-link: #74c0fc;
+  --color-sky-success: #38d9a9;
+  --color-sky-error: #ff6b6b;
+  --color-sky-warning: #ffd43b;
+  --color-sky-selection: #1a3a5c;
+
+  --font-sans: Geist, 'Segoe UI Variable', 'PingFang SC', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-sky-canvas-soft-2);
+  color: var(--color-sky-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-sky-primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-sky-selection);
+  color: var(--color-sky-ink);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-sky-canvas);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-sky-hairline-strong);
+  border: 2px solid var(--color-sky-canvas);
+  border-radius: 9999px;
+}
+
+* {
+  box-sizing: border-box;
+}

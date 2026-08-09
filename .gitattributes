@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+*.ico binary
+*.icns binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.fits binary
+*.fit binary
+*.fts binary

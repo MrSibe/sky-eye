@@ -1,0 +1,69 @@
+# SkyEye 开发路线图
+
+状态标记：`[x]` 已完成，`[~]` 已有基础实现但尚未达到科学验收，`[ ]` 未完成。
+
+## M0：可信核心与工程基线
+
+- [x] Tauri v2 + React 19 + TypeScript 项目可构建。
+- [x] FITS 基础读取、Header 展示、Canvas 显示、拉伸和多帧切换。
+- [x] 建立 Git 基线与 MVP、架构、技术决策文档。
+- [x] 建立 `AstroTime`、`ImageFrame`、`Measurement` 核心类型。
+- [x] SEP Windows/MSVC 编译门禁。
+- [x] SEP 背景、检测、deblend 参数、形状和 flags 安全封装。
+- [x] SEP 亚像素孔径 + sigma-clipped 天光环测光接口。
+- [x] TAN/CD 像素与天空坐标双向转换及往返测试。
+- [x] 移除伪造成功的 Plate Solve 占位结果。
+- [~] CFITSIO feature 已定义；需要 CMake 后完成 Windows 构建与压缩 FITS 测试。
+- [x] 大像素数组已从 JSON IPC 改为 Tauri raw `ArrayBuffer`；流式 tiles 后续按需要实现。
+
+## M1：Data Reduction MVP
+
+- [~] VizieR TAP/ADQL/JSON Gaia 客户端、内存缓存和超时/取消已完成；磁盘缓存待实现。
+- [x] Gaia DR3 cone search 与 proper motion 线性历元传播。
+- [~] Header 中心、`CD/CDELT/PIXSCALE`、焦距/像元估计、归算参数面板和 Gaia 圆圈人工校准已接入；持久化设备配置待实现。
+- [x] 图像源质量筛选和 Gaia 切平面投影。
+- [x] 基于尺度先验的星对 Hough 投票、三角形回退、全场一致性评分和 TAN/CD 最小二乘拟合。
+- [x] 迭代异常星剔除、RMS 和逐星残差目录。
+- [x] 整组批量归算、逐帧独立 WCS、上一成功帧 tracking hint 和逐帧失败隔离。
+- [~] 每帧已独立保存源目录、Gaia 星表和求解结果；完整 provenance 待实现。
+- [ ] 残差覆盖层、参考星删除与重新拟合界面。
+
+验收：真实测试图匹配数达到约定下限，RMS 目标 `< 1 arcsec`，WCS 往返 `< 0.05 px`，失败必须给出明确原因。
+
+## M2：测量、测光与 Blink
+
+- [ ] 点击目标的质心与二维椭圆高斯 PSF 拟合。
+- [ ] 输出 centroid/PSF 不确定度、FWHM、长短轴、方向和 flags。
+- [ ] ATLAS REFCAT2 查询、颜色项和零点稳健拟合。
+- [ ] 多帧星点配准和亚像素重采样。
+- [~] Blink 播放、速度和帧导航已存在；标准 ZScale、Linear/Asinh 和整组拉伸锁定已完成，WCS 背景对齐待实现。
+- [ ] 测量表、质量控制、接受/拒绝和跨帧目标关联。
+
+验收：合成 Gaussian flux 误差 `< 1%`；真实标准场给出零点残差和异常星；对齐后恒星残差 `< 1 px`。
+
+## M3：报告与已知天体
+
+- [ ] MPC_ORB JSON 下载、版本管理和本地缓存。
+- [ ] 在线 MPChecker MVP；离线轨道传播器后置。
+- [ ] 已知天体覆盖和测量交叉匹配。
+- [ ] ADES 2022 PSV 数据模型、生成器和 schema/规则校验。
+- [ ] 观测站、设备、滤镜和星表配置。
+- [ ] 工程 SQLite、恢复、审计记录和导出包。
+
+验收：ADES 通过官方校验；报告中的时刻、坐标、星等、星表和站点可追溯到具体输入与处理参数。
+
+## M4：自动发现与暗弱目标
+
+- [ ] 多帧固定恒星过滤、匀速 tracklet 链接和候选评分。
+- [ ] Blink 人工复核队列。
+- [ ] Dark/Flat 标定和坏点/宇宙线处理。
+- [ ] 普通配准叠加。
+- [ ] 给定速度的 Track & Stack。
+- [ ] 速度网格 synthetic tracking；CPU 基准不足时再评估 `wgpu`。
+
+## 当前下一个切片
+
+1. 使用 Astrometrica 教程图和不同仪器真实 FITS 验证星对投票，建立 golden regression data。
+2. 评估 `tetra3` Rust 后端和 Astrometry.net sidecar，加入经过统计验证的四星哈希回退。
+3. 实现残差覆盖层、参考星手工删除和重新拟合。
+4. 增加 VizieR 磁盘缓存、设备配置持久化与完整归算 provenance。

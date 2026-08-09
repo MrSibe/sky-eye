@@ -1,0 +1,254 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+use crate::measurement::normalize_tracklet_designation;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AdesContext {
+    pub observatory_code: String,
+    pub submitter: String,
+    pub observers: Vec<String>,
+    pub measurers: Vec<String>,
+    pub telescope: Option<String>,
+    pub telescope_aperture_m: Option<f64>,
+    pub detector: Option<String>,
+    pub software_version: String,
+    pub position_precision_1e6_deg: bool,
+    pub magnitude_precision_hundredth: bool,
+    pub mpcorb_sha256: Option<String>,
+    pub refcat2_sha256: Option<String>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AdesObservation {
+    pub perm_id: Option<String>,
+    pub prov_id: Option<String>,
+    pub trk_sub: Option<String>,
+    pub mode: String,
+    pub obs_time: String,
+    pub ra_deg: f64,
+    pub dec_deg: f64,
+    pub rms_ra_arcsec: Option<f64>,
+    pub rms_dec_arcsec: Option<f64>,
+    pub ast_cat: String,
+    pub mag: Option<f64>,
+    pub rms_mag: Option<f64>,
+    pub band: Option<String>,
+    pub filter: Option<String>,
+    pub phot_cat: Option<String>,
+    pub phot_ap_arcsec: Option<f64>,
+    pub snr: Option<f64>,
+    pub seeing_arcsec: Option<f64>,
+    pub exposure_seconds: Option<f64>,
+    pub rms_fit_arcsec: Option<f64>,
+    pub astrometric_reference_stars: Option<usize>,
+    pub accepted_wcs: bool,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AdesRequest {
+    pub context: AdesContext,
+    pub observations: Vec<AdesObservation>,
+}
+
+pub fn render(req: &AdesRequest) -> Result<String, Vec<String>> {
+    let mut errors = validate(req);
+    if !errors.is_empty() {
+        return Err(std::mem::take(&mut errors));
+    }
+    let cols = [
+        "permID", "provID", "trkSub", "mode", "stn", "obsTime", "ra", "dec", "rmsRA", "rmsDec",
+        "astCat", "mag", "rmsMag", "band", "fltr", "photCat", "photAp", "logSNR", "seeing", "exp",
+        "rmsFit", "nStars",
+    ];
+    let mut out = format!(
+        "# version=2022\n# observatory\n! mpcCode {}\n# submitter\n! name {}\n# observers\n",
+        req.context.observatory_code, req.context.submitter
+    );
+    for x in &req.context.observers {
+        out.push_str(&format!("! name {x}\n"));
+    }
+    out.push_str("# measurers\n");
+    for x in &req.context.measurers {
+        out.push_str(&format!("! name {x}\n"));
+    }
+    if req.context.telescope.is_some()
+        || req.context.telescope_aperture_m.is_some()
+        || req.context.detector.is_some()
+    {
+        out.push_str("# telescope\n");
+        if let Some(t) = &req.context.telescope {
+            out.push_str(&format!("! design {t}\n"));
+        }
+        if let Some(aperture) = req
+            .context
+            .telescope_aperture_m
+            .filter(|value| *value > 0.0)
+        {
+            out.push_str(&format!("! aperture {aperture}\n"));
+        }
+        if let Some(detector) = req
+            .context
+            .detector
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            out.push_str(&format!("! detector {detector}\n"));
+        }
+    }
+    out.push_str(&format!(
+        "# software\n! astrometry {}\n! photometry {}\n",
+        req.context.software_version, req.context.software_version
+    ));
+    out.push_str(&cols.join("|"));
+    out.push('\n');
+    for o in &req.observations {
+        let position_digits = if req.context.position_precision_1e6_deg {
+            6
+        } else {
+            5
+        };
+        let magnitude_digits = if req.context.magnitude_precision_hundredth {
+            2
+        } else {
+            1
+        };
+        let values = vec![
+            s(&o.perm_id),
+            s(&o.prov_id),
+            s(&o.trk_sub),
+            o.mode.clone(),
+            req.context.observatory_code.clone(),
+            o.obs_time.clone(),
+            format!("{:.position_digits$}", o.ra_deg),
+            format!("{:+.position_digits$}", o.dec_deg),
+            f(o.rms_ra_arcsec, 3),
+            f(o.rms_dec_arcsec, 3),
+            o.ast_cat.clone(),
+            f(o.mag, magnitude_digits),
+            f(o.rms_mag, 3),
+            s(&o.band),
+            s(&o.filter),
+            s(&o.phot_cat),
+            f(o.phot_ap_arcsec, 2),
+            o.snr
+                .map(|v| format!("{:.3}", v.log10()))
+                .unwrap_or_default(),
+            f(o.seeing_arcsec, 2),
+            f(o.exposure_seconds, 2),
+            f(o.rms_fit_arcsec, 3),
+            o.astrometric_reference_stars
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+        ];
+        out.push_str(&values.join("|"));
+        out.push('\n');
+    }
+    Ok(out)
+}
+fn s(v: &Option<String>) -> String {
+    v.clone().unwrap_or_default()
+}
+fn f(v: Option<f64>, p: usize) -> String {
+    v.map(|x| format!("{x:.p$}")).unwrap_or_default()
+}
+pub fn validate(req: &AdesRequest) -> Vec<String> {
+    let mut e = Vec::new();
+    let observatory_code = req.context.observatory_code.trim();
+    if observatory_code.is_empty() {
+        e.push("缺少 MPC 台站代码".into());
+    } else if observatory_code.eq_ignore_ascii_case("XXX") {
+        e.push("MPC 台站代码仍为占位值 XXX".into());
+    }
+    if req.context.submitter.trim().is_empty() {
+        e.push("缺少提交者".into());
+    }
+    if req.observations.is_empty() {
+        e.push("没有可导出的观测".into());
+    }
+    let bands: HashSet<&str> = [
+        "U", "B", "V", "G", "R", "I", "J", "W", "C", "u", "g", "r", "i", "z", "y", "w",
+    ]
+    .into_iter()
+    .collect();
+    for (i, o) in req.observations.iter().enumerate() {
+        let n = i + 1;
+        if [&o.perm_id, &o.prov_id, &o.trk_sub]
+            .iter()
+            .filter(|v| v.as_ref().is_some_and(|s| !s.trim().is_empty()))
+            .count()
+            != 1
+        {
+            e.push(format!("第 {n} 条必须且只能设置 permID/provID/trkSub 之一"));
+        }
+        if let Some(tracklet) = o.trk_sub.as_deref() {
+            if let Err(error) = normalize_tracklet_designation(tracklet) {
+                e.push(format!("第 {n} 条 trkSub 不合法：{error}"));
+            }
+        }
+        if o.obs_time.trim().is_empty() {
+            e.push(format!("第 {n} 条缺少 UTC 曝光中点"));
+        }
+        if !o.accepted_wcs {
+            e.push(format!("第 {n} 条 WCS 未接受"));
+        }
+        if o.ast_cat != "Gaia3" {
+            e.push(format!("第 {n} 条 astCat 必须为 Gaia3"));
+        }
+        if o.mag.is_some() {
+            if !o.band.as_deref().is_some_and(|b| bands.contains(b)) {
+                e.push(format!("第 {n} 条星等缺少合法波段"));
+            }
+            if o.phot_cat.as_deref() != Some("ATLAS2") {
+                e.push(format!("第 {n} 条星等 photCat 必须为 ATLAS2"));
+            }
+        }
+    }
+    e
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn blocks_unaccepted_wcs() {
+        let r = AdesRequest {
+            context: AdesContext {
+                observatory_code: "500".into(),
+                submitter: "A".into(),
+                observers: vec![],
+                measurers: vec![],
+                telescope: None,
+                telescope_aperture_m: None,
+                detector: None,
+                software_version: "x".into(),
+                position_precision_1e6_deg: true,
+                magnitude_precision_hundredth: false,
+                mpcorb_sha256: None,
+                refcat2_sha256: None,
+            },
+            observations: vec![AdesObservation {
+                perm_id: Some("1".into()),
+                prov_id: None,
+                trk_sub: None,
+                mode: "CCD".into(),
+                obs_time: "2026-01-01T00:00:00Z".into(),
+                ra_deg: 1.,
+                dec_deg: -1.,
+                rms_ra_arcsec: None,
+                rms_dec_arcsec: None,
+                ast_cat: "Gaia3".into(),
+                mag: None,
+                rms_mag: None,
+                band: None,
+                filter: None,
+                phot_cat: None,
+                phot_ap_arcsec: None,
+                snr: None,
+                seeing_arcsec: None,
+                exposure_seconds: None,
+                rms_fit_arcsec: None,
+                astrometric_reference_stars: None,
+                accepted_wcs: false,
+            }],
+        };
+        assert!(render(&r).is_err());
+    }
+}

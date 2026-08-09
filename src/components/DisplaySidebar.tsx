@@ -1,0 +1,283 @@
+import { useCallback, useEffect, useRef } from 'react'
+import { ChevronLeft, ChevronRight, Contrast, Maximize2, Play, Square } from 'lucide-react'
+import { useSessionStore } from '../stores/sessionStore'
+import { blinkNext, blinkPrev, blinkSetFrame, blinkSetSpeed, blinkToggle } from '../lib/tauri'
+import { Button } from './ui/button'
+import { Select } from './ui/form'
+import { Panel } from './ui/surface'
+
+interface DisplaySidebarProps {
+  stretchMode: 'linear' | 'asinh'
+  onStretchModeChange: (mode: 'linear' | 'asinh') => void
+  inverted: boolean
+  onInvertedChange: (inverted: boolean) => void
+  onFitView: () => void
+}
+
+export function DisplaySidebar({
+  stretchMode,
+  onStretchModeChange,
+  inverted,
+  onInvertedChange,
+  onFitView,
+}: DisplaySidebarProps) {
+  const { frames, currentFrameIndex, isPlaying, speedMs, setBlinkState } = useSessionStore()
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = null
+
+    if (isPlaying && frames.length >= 2) {
+      timerRef.current = setInterval(async () => {
+        try {
+          setBlinkState(await blinkNext())
+        } catch {
+          /* ignore transient native errors */
+        }
+      }, speedMs)
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [frames.length, isPlaying, setBlinkState, speedMs])
+
+  const selectFrame = useCallback(
+    async (index: number) => {
+      try {
+        setBlinkState(await blinkSetFrame(index))
+      } catch {
+        /* ignore transient native errors */
+      }
+    },
+    [setBlinkState],
+  )
+
+  const changeFrame = useCallback(
+    async (direction: 'previous' | 'next') => {
+      try {
+        setBlinkState(direction === 'previous' ? await blinkPrev() : await blinkNext())
+      } catch {
+        /* ignore transient native errors */
+      }
+    },
+    [setBlinkState],
+  )
+
+  const toggleBlink = useCallback(async () => {
+    try {
+      useSessionStore.getState().setPlaying(await blinkToggle())
+    } catch {
+      /* ignore transient native errors */
+    }
+  }, [])
+
+  const setSpeed = useCallback((value: number) => {
+    const bounded = Math.min(1000, Math.max(50, value))
+    useSessionStore.getState().setSpeedMs(bounded)
+    void blinkSetSpeed(bounded).catch(() => {
+      /* ignore transient native errors */
+    })
+  }, [])
+
+  const changeSpeed = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      setSpeed(Number(event.target.value))
+    },
+    [setSpeed],
+  )
+
+  useEffect(() => {
+    if (frames.length < 2) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target
+      if (
+        document.querySelector('[aria-modal="true"]') ||
+        (target instanceof HTMLElement &&
+          target.closest(
+            'input, select, textarea, button, [contenteditable]:not([contenteditable="false"])',
+          ))
+      ) {
+        return
+      }
+
+      if (event.code === 'Space') {
+        if (event.repeat) return
+        event.preventDefault()
+        void toggleBlink()
+        return
+      }
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault()
+        void changeFrame(event.key === 'ArrowLeft' ? 'previous' : 'next')
+        return
+      }
+
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault()
+        const currentSpeed = useSessionStore.getState().speedMs
+        setSpeed(currentSpeed + (event.key === 'ArrowUp' ? -50 : 50))
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [changeFrame, frames.length, setSpeed, toggleBlink])
+
+  return (
+    <Panel
+      className="w-60 shrink-0 border-l border-sky-hairline"
+      title={<span className="text-[11px] tracking-wide">显示</span>}
+      aria-label="显示与帧控制"
+    >
+      <section className="border-b border-sky-hairline px-3 py-3">
+        <label
+          htmlFor="display-stretch"
+          className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.12em] text-sky-mute"
+        >
+          图像拉伸
+        </label>
+        <Select
+          id="display-stretch"
+          value={stretchMode}
+          onChange={(event) => onStretchModeChange(event.target.value as 'linear' | 'asinh')}
+          className="h-7 text-[11px]"
+        >
+          <option value="linear">ZScale · 线性</option>
+          <option value="asinh">ZScale · Asinh</option>
+        </Select>
+        <div className="mt-2 grid grid-cols-2 gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onFitView}
+            title="居中图像并缩放到适合当前窗口"
+          >
+            <Maximize2 size={13} />
+            适应窗口
+          </Button>
+          <Button
+            variant={inverted ? 'tool' : 'ghost'}
+            size="sm"
+            onClick={() => onInvertedChange(!inverted)}
+            aria-pressed={inverted}
+            title={inverted ? '切换为亮星暗背景' : '切换为暗星亮背景'}
+          >
+            <Contrast size={13} />
+            反色
+          </Button>
+        </div>
+      </section>
+
+      <section className="flex min-h-0 flex-1 flex-col">
+        <div className="flex h-8 shrink-0 items-center justify-between border-b border-sky-hairline px-3">
+          <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-sky-mute">
+            FITS 列表
+          </span>
+          <span className="font-mono text-[10px] text-sky-mute">{frames.length}</span>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {frames.map((frame, index) => (
+            <button
+              key={frame.path || index}
+              onClick={() => selectFrame(index)}
+              aria-current={index === currentFrameIndex ? 'true' : undefined}
+              className={`w-full border-b border-sky-hairline px-3 py-2 text-left text-[11px] leading-4 transition-colors ${
+                index === currentFrameIndex
+                  ? 'bg-sky-selection text-sky-ink'
+                  : 'text-sky-body hover:bg-sky-control-hover hover:text-sky-ink'
+              }`}
+            >
+              <div className="truncate font-normal text-sky-ink/90">{frame.label}</div>
+              <div className="mt-0.5 flex items-center justify-between font-mono text-[10px] leading-3.5 text-sky-mute">
+                <span>
+                  {frame.width}×{frame.height}
+                </span>
+                {frame.solved && <span className="font-sans text-sky-success">已归算</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {frames.length >= 2 && (
+        <section className="shrink-0 border-t border-sky-hairline px-3 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-sky-mute">
+              闪烁控制
+            </span>
+            <span className="font-mono text-[10px] text-sky-body">
+              {currentFrameIndex + 1}/{frames.length}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => changeFrame('previous')}
+              aria-label="上一帧"
+              title="上一帧"
+            >
+              <ChevronLeft size={15} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleBlink}
+              aria-label={isPlaying ? '停止闪烁' : '开始闪烁'}
+              title={isPlaying ? '停止' : '开始'}
+            >
+              {isPlaying ? <Square size={13} /> : <Play size={14} />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => changeFrame('next')}
+              aria-label="下一帧"
+              title="下一帧"
+            >
+              <ChevronRight size={15} />
+            </Button>
+          </div>
+
+          <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-2">
+            <label htmlFor="blink-speed" className="sr-only">
+              闪烁速度
+            </label>
+            <input
+              id="blink-speed"
+              type="range"
+              min={50}
+              max={1000}
+              step={50}
+              value={speedMs}
+              onChange={changeSpeed}
+              className="h-1 w-full accent-sky-primary"
+            />
+            <span className="w-12 text-right font-mono text-[10px] text-sky-mute">
+              {speedMs} ms
+            </span>
+          </div>
+
+          <div className="mt-3 border-t border-sky-hairline pt-2 font-mono text-[9px] leading-4 text-sky-mute">
+            <div className="flex items-center justify-between">
+              <span>
+                <kbd className="text-sky-body">Space</kbd> 播放 / 暂停
+              </span>
+              <span>
+                <kbd className="text-sky-body">← →</kbd> 切帧
+              </span>
+            </div>
+            <div>
+              <kbd className="text-sky-body">↑ ↓</kbd> 加快 / 减慢
+            </div>
+          </div>
+        </section>
+      )}
+    </Panel>
+  )
+}

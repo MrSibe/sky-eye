@@ -1,0 +1,37 @@
+{
+  "dataset": "Pan-STARRS IPP CHIP XY54.p10",
+  "environment_variable": "SKYEYE_GOLDEN_DIR",
+  "calibration_state": "upstream detrended",
+  "expected": {
+    "width": 2423,
+    "height": 2434,
+    "exposure_seconds": 45.0,
+    "pixel_scale_arcsec": 0.257,
+    "minimum_reference_stars": 20,
+    "maximum_rms_arcsec": 0.5,
+    "maximum_p95_arcsec": 1.0,
+    "minimum_grid_cells": 8
+  },
+  "frames": [
+    {
+      "file": "o60934g0354o.2320159.ch.2929682.XY54.p10.fits",
+      "bytes": 11848320,
+      "sha256": "bfdd867550d43a6b16353e8daeacc3bc61ac987a7350d9f5fff02d26d132bffd"
+    },
+    {
+      "file": "o60934g0371o.2320176.ch.2929699.XY54.p10.fits",
+      "bytes": 11848320,
+      "sha256": "47e8dcaffecf04b1e7656c87f24cc077203a9020a13f6596ec9e9edf3bfff4fd"
+    },
+    {
+      "file": "o60934g0388o.2320193.ch.2929716.XY54.p10.fits",
+      "bytes": 11848320,
+      "sha256": "016ad907e30114e2be02ed7d55175542c1cfb002d021af53f84ddb5faf4de49c"
+    },
+    {
+      "file": "o60934g0405o.2320210.ch.2929733.XY54.p10.fits",
+      "bytes": 11848320,
+      "sha256": "58de741062664d3f04f1baa5c5be4792ab70ed13f2b72f7c16b59a687fea0a69"
+    }
+  ]
+}
