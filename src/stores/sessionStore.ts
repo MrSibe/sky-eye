@@ -18,9 +18,7 @@ interface SessionState {
   isSolving: boolean
   solveSuccess: boolean
   frames: FrameMeta[]
-  framePixels: Float32Array[]
-  frameWidth: number
-  frameHeight: number
+  framePixels: Record<number, { pixels: Float32Array; width: number; height: number }>
   currentFrameIndex: number
   isPlaying: boolean
   speedMs: number
@@ -39,7 +37,8 @@ interface SessionState {
   setIsSolving: (v: boolean) => void
   setFrames: (frames: FrameMeta[]) => void
   setBlinkState: (state: BlinkState) => void
-  setFramePixels: (pixels: Float32Array[], width: number, height: number) => void
+  cacheFramePixels: (index: number, pixels: Float32Array, width: number, height: number) => void
+  pruneFramePixels: (currentIndex: number, total: number) => void
   setCurrentFrame: (index: number) => void
   setPlaying: (playing: boolean) => void
   setSpeedMs: (ms: number) => void
@@ -54,9 +53,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   isSolving: false,
   solveSuccess: false,
   frames: [],
-  framePixels: [],
-  frameWidth: 0,
-  frameHeight: 0,
+  framePixels: {},
   currentFrameIndex: 0,
   isPlaying: false,
   speedMs: 300,
@@ -140,8 +137,20 @@ export const useSessionStore = create<SessionState>((set) => ({
       wcs: state.frameAnalyses[blink.current_index]?.solution?.wcs ?? null,
       solveSuccess: state.frameAnalyses[blink.current_index]?.solution?.success ?? false,
     })),
-  setFramePixels: (pixels, width, height) =>
-    set({ framePixels: pixels, frameWidth: width, frameHeight: height }),
+  cacheFramePixels: (index, pixels, width, height) =>
+    set((state) => ({
+      framePixels: { ...state.framePixels, [index]: { pixels, width, height } },
+    })),
+  pruneFramePixels: (currentIndex, total) =>
+    set((state) => {
+      if (total <= 0) return { framePixels: {} }
+      const nextIndex = total > 1 ? (currentIndex + 1) % total : currentIndex
+      const retained: SessionState['framePixels'] = {}
+      for (const index of [currentIndex, nextIndex]) {
+        if (state.framePixels[index]) retained[index] = state.framePixels[index]
+      }
+      return { framePixels: retained }
+    }),
   setCurrentFrame: (index) =>
     set((state) => ({
       currentFrameIndex: index,
@@ -159,9 +168,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       wcs: null,
       solveSuccess: false,
       frames: [],
-      framePixels: [],
-      frameWidth: 0,
-      frameHeight: 0,
+      framePixels: {},
       currentFrameIndex: 0,
       isPlaying: false,
       speedMs: 300,

@@ -2,9 +2,7 @@ use crate::astrometry::{matcher, platesolve};
 use crate::catalog::refcat2::Refcat2Client;
 use crate::catalog::vizier::{GaiaQuery, GaiaQueryResult, VizierClient};
 use crate::core::{AstroTime, FrameId};
-use crate::ephemeris::{
-    angular_distance_arcsec, propagate, EphemerisPoint, Observatory, PropagationQuality,
-};
+use crate::ephemeris::{angular_distance_arcsec, propagate, EphemerisPoint, Observatory};
 use crate::fits;
 use crate::measurement::{
     normalize_tracklet_designation, CandidateMatch, MatchStatus, MeasureTargetRequest,
@@ -27,7 +25,7 @@ use tauri::State;
 use tokio_util::sync::CancellationToken;
 
 pub struct AppState {
-    pub loaded_frames: Mutex<Vec<fits::reader::FitsData>>,
+    pub loaded_frames: Mutex<fits::registry::FrameRegistry>,
     pub frame_analyses: Mutex<Vec<FrameAnalysis>>,
     pub current_frame_index: Mutex<usize>,
     pub blink_playing: Mutex<bool>,
@@ -44,7 +42,7 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         AppState {
-            loaded_frames: Mutex::new(Vec::new()),
+            loaded_frames: Mutex::new(fits::registry::FrameRegistry::default()),
             frame_analyses: Mutex::new(Vec::new()),
             current_frame_index: Mutex::new(0),
             blink_playing: Mutex::new(false),
@@ -96,15 +94,6 @@ pub fn close_all_images(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Debug, Serialize)]
-pub struct RawPixels {
-    pub width: u32,
-    pub height: u32,
-    pub pixels: Vec<f32>,
-    pub min: f32,
-    pub max: f32,
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct DetectionResult {
     pub stars: Vec<SourceMeasurement>,
@@ -144,6 +133,9 @@ pub struct SolveParams {
     pub catalog_faint_limit_mag: Option<f32>,
     pub maximum_reference_stars: Option<usize>,
     pub astrometric_residual_limit_arcsec: Option<f64>,
+    /// An explicit operator decision to accept a statistically sound solution
+    /// that did not meet the automatic reference-count/coverage gate.
+    pub accept_review: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -260,6 +252,11 @@ pub struct FrameMeta {
     pub exposure: Option<f64>,
     pub filter: Option<String>,
     pub date_obs: Option<String>,
+    pub selected_hdu: usize,
+    pub image_hdu_count: usize,
+    pub timesys: String,
+    pub time_reference: Option<String>,
+    pub diagnostics: Vec<String>,
     pub observation_midpoint_jd: Option<f64>,
     pub focal_length: Option<f64>,
     pub pixel_size: Option<f64>,
@@ -304,26 +301,35 @@ pub async fn load_frames(
         .lock()
         .map_err(|error| error.to_string())?
         .clear();
-    let load_paths = paths.clone();
     let settings = crate::storage::load_config(&app)?;
-    let mut loaded = tokio::task::spawn_blocking(move || {
-        load_paths
-            .iter()
-            .map(|path| fits::reader::load_fits(path))
-            .collect::<Result<Vec<_>, _>>()
-    })
-    .await
-    .map_err(|e| format!("FITS loader worker failed: {e}"))??;
     let exposure_factor = match settings.time.exposure_unit.as_str() {
         "milliseconds" => 0.001,
         "minutes" => 60.0,
         _ => 1.0,
     };
-    for frame in &mut loaded {
-        frame.metadata.exposure = frame.metadata.exposure.map(|value| value * exposure_factor);
-    }
+    let load_paths = paths.clone();
+    let time_settings = settings.time.clone();
+    let registry = tokio::task::spawn_blocking(move || {
+        let mut registry = fits::registry::FrameRegistry::default();
+        for path in load_paths {
+            let mut frame = fits::reader::load_fits(&path)?;
+            frame.metadata.exposure = frame.metadata.exposure.map(|value| value * exposure_factor);
+            if let Some(value) = frame.metadata.date_obs.clone() {
+                let exposure = frame.metadata.exposure.unwrap_or(0.0);
+                let reference = frame.metadata.time_reference.clone();
+                frame.metadata.observation_midpoint_jd =
+                    configured_midpoint_jd(&value, exposure, &time_settings, reference.as_deref());
+                frame.metadata.observation_midpoint_utc =
+                    midpoint_rfc3339(&value, exposure, &time_settings, reference.as_deref());
+            }
+            registry.push_loaded(frame);
+        }
+        Ok::<_, String>(registry)
+    })
+    .await
+    .map_err(|e| format!("FITS loader worker failed: {e}"))??;
     let mut metas: Vec<FrameMeta> = Vec::new();
-    for (frame_index, (path, data)) in paths.iter().zip(&loaded).enumerate() {
+    for (frame_index, (path, data)) in paths.iter().zip(registry.summaries()).enumerate() {
         let label = data.metadata.object.clone().unwrap_or_else(|| {
             std::path::Path::new(path)
                 .file_stem()
@@ -343,9 +349,12 @@ pub async fn load_frames(
             exposure: data.metadata.exposure,
             filter: data.metadata.filter.clone(),
             date_obs: data.metadata.date_obs.clone(),
-            observation_midpoint_jd: data.metadata.date_obs.as_deref().and_then(|value| {
-                configured_midpoint_jd(value, data.metadata.exposure.unwrap_or(0.0), &settings.time)
-            }),
+            selected_hdu: data.metadata.selected_hdu,
+            image_hdu_count: data.metadata.image_hdu_count,
+            timesys: data.metadata.timesys.clone(),
+            time_reference: data.metadata.time_reference.clone(),
+            diagnostics: data.metadata.diagnostics.clone(),
+            observation_midpoint_jd: data.metadata.observation_midpoint_jd,
             focal_length: data.metadata.focal_len,
             pixel_size: data.metadata.pixel_size,
             pixel_scale_arcsec: data.metadata.pixel_scale_arcsec,
@@ -355,8 +364,8 @@ pub async fn load_frames(
             solved: false,
         });
     }
-    let total = loaded.len();
-    *state.loaded_frames.lock().map_err(|e| e.to_string())? = loaded;
+    let total = registry.len();
+    *state.loaded_frames.lock().map_err(|e| e.to_string())? = registry;
     let mut analyses = state.frame_analyses.lock().map_err(|e| e.to_string())?;
     *analyses = vec![FrameAnalysis::default(); total];
     let mut idx = state
@@ -372,39 +381,9 @@ pub async fn load_frames(
 }
 
 #[tauri::command]
-pub fn get_raw_pixels(state: State<AppState>) -> Result<RawPixels, String> {
-    let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-    let idx = state
-        .current_frame_index
-        .lock()
-        .map_err(|e| e.to_string())?;
-    let data = frames.get(*idx).ok_or("No frames loaded")?;
-    Ok(RawPixels {
-        width: data.width,
-        height: data.height,
-        pixels: data.pixels.clone(),
-        min: data.min,
-        max: data.max,
-    })
-}
-
-#[tauri::command]
-pub fn get_frame_pixels(state: State<AppState>, index: usize) -> Result<RawPixels, String> {
-    let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-    let data = frames.get(index).ok_or("Invalid frame index")?;
-    Ok(RawPixels {
-        width: data.width,
-        height: data.height,
-        pixels: data.pixels.clone(),
-        min: data.min,
-        max: data.max,
-    })
-}
-
-#[tauri::command]
 pub fn get_frame_pixel_buffer(state: State<AppState>, index: usize) -> Result<Response, String> {
-    let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-    let data = frames.get(index).ok_or("Invalid frame index")?;
+    let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+    let data = frames.get(index)?;
     let mut bytes = Vec::with_capacity(data.pixels.len() * size_of::<f32>());
     for pixel in &data.pixels {
         bytes.extend_from_slice(&pixel.to_le_bytes());
@@ -445,8 +424,8 @@ fn detect_frame(state: &AppState, idx: usize) -> Result<DetectionResult, String>
     }
 
     let (mut pixels, valid_pixels, width, height, saturation_level, gain_e_per_adu) = {
-        let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-        let data = frames.get(idx).ok_or("No frames loaded")?;
+        let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+        let data = frames.get(idx)?;
         (
             data.pixels.clone(),
             data.valid_pixels.clone(),
@@ -524,8 +503,8 @@ async fn detect_frame_async(
         return Ok(cached);
     }
     let (mut pixels, valid_pixels, width, height, saturation_level, gain_e_per_adu) = {
-        let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-        let data = frames.get(idx).ok_or("No frames loaded")?;
+        let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+        let data = frames.get(idx)?;
         (
             data.pixels.clone(),
             data.valid_pixels.clone(),
@@ -653,8 +632,8 @@ pub async fn calibrate_frame_photometry(
     let frame_index = request.frame_index;
     let calibrated = solve_frame_photometry(&app, &state, frame_index, request.band).await?;
     let (exposure, frame_path) = {
-        let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-        let frame = frames.get(frame_index).ok_or("Invalid frame index")?;
+        let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+        let frame = frames.get(frame_index)?;
         (frame.metadata.exposure.unwrap_or(0.0), frame.path.clone())
     };
     let solution = calibrated.solution.clone();
@@ -710,8 +689,8 @@ async fn solve_frame_photometry(
             .detection
             .clone()
             .ok_or("Run source detection first")?;
-        let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-        let f = frames.get(frame_index).ok_or("Invalid frame index")?;
+        let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+        let f = frames.get(frame_index)?;
         (
             wcs,
             detection,
@@ -752,8 +731,8 @@ async fn solve_frame_photometry(
     let fwhm = fwhms.get(fwhms.len() / 2).copied().unwrap_or(3.0);
     let isolation_limit = (2.0 * fwhm * wcs.pixel_scale()).max(5.0);
     let (pixels, bkg) = {
-        let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-        let f = frames.get(frame_index).ok_or("Invalid frame index")?;
+        let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+        let f = frames.get(frame_index)?;
         let reducer = SepReducer;
         let b = reducer
             .background(&f.pixels, width, height, BackgroundConfig::default())
@@ -899,12 +878,12 @@ pub fn measure_aperture(
     state: State<AppState>,
     params: ApertureParams,
 ) -> Result<ApertureMeasurement, String> {
-    let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+    let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
     let idx = state
         .current_frame_index
         .lock()
         .map_err(|e| e.to_string())?;
-    let data = frames.get(*idx).ok_or("No frames loaded")?;
+    let data = frames.get(*idx)?;
     let reducer = SepReducer;
     let background = reducer
         .background(
@@ -990,10 +969,8 @@ pub fn measure_target(
     } else {
         settings.photometry.sky_annulus_outer_fwhm * frame_fwhm
     };
-    let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-    let frame = frames
-        .get(request.frame_index)
-        .ok_or("Invalid frame index")?;
+    let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+    let frame = frames.get(request.frame_index)?;
     let reducer = SepReducer;
     let bkg = reducer
         .background(
@@ -1050,13 +1027,8 @@ pub fn measure_target(
     if !wcs_accepted {
         flags.push("wcs_not_accepted".into());
     }
-    let midpoint_jd = frame.metadata.date_obs.as_deref().and_then(|v| {
-        configured_midpoint_jd(v, frame.metadata.exposure.unwrap_or(0.0), &settings.time)
-    });
-    let midpoint_utc =
-        frame.metadata.date_obs.as_deref().and_then(|v| {
-            midpoint_rfc3339(v, frame.metadata.exposure.unwrap_or(0.0), &settings.time)
-        });
+    let midpoint_jd = frame.metadata.observation_midpoint_jd;
+    let midpoint_utc = frame.metadata.observation_midpoint_utc.clone();
     let mut value = TargetMeasurement {
         id: uuid::Uuid::new_v4().to_string(),
         frame_index: request.frame_index,
@@ -1101,11 +1073,19 @@ pub fn measure_target(
         .insert(value.id.clone(), value.clone());
     Ok(value)
 }
-fn midpoint_adjustment_seconds(exposure: f64, settings: &crate::storage::TimeConfig) -> f64 {
-    let reference = match settings.date_obs_reference.as_str() {
-        "midpoint" => 0.0,
-        "end" => -exposure / 2.0,
-        _ => exposure / 2.0,
+fn midpoint_adjustment_seconds(
+    exposure: f64,
+    settings: &crate::storage::TimeConfig,
+    header_reference: Option<&str>,
+) -> f64 {
+    let reference = match header_reference {
+        Some("average") => 0.0,
+        Some("begin") => exposure / 2.0,
+        _ => match settings.date_obs_reference.as_str() {
+            "midpoint" => 0.0,
+            "end" => -exposure / 2.0,
+            _ => exposure / 2.0,
+        },
     };
     reference + settings.utc_offset_hours * 3600.0 + settings.shutter_delay_seconds
 }
@@ -1113,14 +1093,16 @@ fn configured_midpoint_jd(
     value: &str,
     exposure: f64,
     settings: &crate::storage::TimeConfig,
+    header_reference: Option<&str>,
 ) -> Option<f64> {
     let base = AstroTime::from_fits_utc(value).ok()?.julian_date();
-    Some(base + midpoint_adjustment_seconds(exposure, settings) / 86_400.0)
+    Some(base + midpoint_adjustment_seconds(exposure, settings, header_reference) / 86_400.0)
 }
 fn midpoint_rfc3339(
     value: &str,
     exposure: f64,
     settings: &crate::storage::TimeConfig,
+    header_reference: Option<&str>,
 ) -> Option<String> {
     use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
     let v = if value.ends_with('Z') {
@@ -1131,7 +1113,9 @@ fn midpoint_rfc3339(
     let midpoint = OffsetDateTime::parse(&v, &Rfc3339)
         .ok()?
         .checked_add(Duration::seconds_f64(midpoint_adjustment_seconds(
-            exposure, settings,
+            exposure,
+            settings,
+            header_reference,
         )))?;
     let precision = settings.precision_seconds.clamp(1e-9, 1.0);
     let quantum_ns = (precision * 1e9).round().max(1.0) as i128;
@@ -1271,7 +1255,8 @@ pub async fn search_known_objects(
         return Err("radius must be in [0,10] degrees".into());
     }
     let (m, orbits) = active_orbits(&state, mpc_root(&app)?).await?;
-    let objects = tokio::task::spawn_blocking(move || {
+    let online_request = request.clone();
+    let local_objects = tokio::task::spawn_blocking(move || {
         let mut objects: Vec<_> = orbits
             .par_iter()
             .filter_map(|o| propagate(o, request.jd_utc, request.station).ok())
@@ -1294,6 +1279,28 @@ pub async fn search_known_objects(
     })
     .await
     .map_err(|e| format!("known-object worker failed: {e}"))?;
+    let objects = if let Some(station) = online_request.station {
+        match crate::ephemeris::jpl::identify_second_pass(
+            online_request.jd_utc,
+            online_request.center_ra_deg,
+            online_request.center_dec_deg,
+            online_request.radius_deg,
+            station,
+        )
+        .await
+        {
+            Ok(mut precise) => {
+                precise.truncate(online_request.max_results.unwrap_or(1000).min(5000));
+                precise
+            }
+            Err(error) => {
+                log::warn!("JPL second-pass unavailable; retaining local predictions: {error}");
+                local_objects
+            }
+        }
+    } else {
+        local_objects
+    };
     Ok(KnownObjectResult {
         database: m,
         objects,
@@ -1342,14 +1349,15 @@ pub async fn search_known_objects_batch(
     }
     let (manifest, orbits) = active_orbits(&state, mpc_root(&app)?).await?;
     let frames = request.frames;
+    let local_frames = frames.clone();
     let station = request.station;
     let limit = request.max_results_per_frame.unwrap_or(1000).min(5000);
     let mut grouped = tokio::task::spawn_blocking(move || {
-        let start = frames
+        let start = local_frames
             .iter()
             .map(|f| f.jd_utc)
             .fold(f64::INFINITY, f64::min);
-        let end = frames
+        let end = local_frames
             .iter()
             .map(|f| f.jd_utc)
             .fold(f64::NEG_INFINITY, f64::max);
@@ -1363,7 +1371,7 @@ pub async fn search_known_objects_batch(
                     * span_minutes
                     / 3600.0)
                     .min(30.0);
-                let may_cross = frames.iter().any(|f| {
+                let may_cross = local_frames.iter().any(|f| {
                     let limit = (f.radius_deg + padding_deg) * 3600.0;
                     angular_distance_arcsec(
                         f.center_ra_deg,
@@ -1381,7 +1389,7 @@ pub async fn search_known_objects_batch(
                 if !may_cross {
                     return None;
                 }
-                let exact: Vec<_> = frames
+                let exact: Vec<_> = local_frames
                     .iter()
                     .filter_map(|f| {
                         let p = propagate(orbit, f.jd_utc, station).ok()?;
@@ -1402,7 +1410,7 @@ pub async fn search_known_objects_batch(
         for (index, point) in hits {
             map.entry(index).or_default().push(point)
         }
-        frames
+        local_frames
             .into_iter()
             .map(|f| {
                 let mut objects = map.remove(&f.frame_index).unwrap_or_default();
@@ -1422,6 +1430,46 @@ pub async fn search_known_objects_batch(
     .await
     .map_err(|e| format!("known-object batch worker failed: {e}"))?;
     grouped.sort_by_key(|f| f.frame_index);
+    if let Some(station) = station {
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(3));
+        let mut tasks = tokio::task::JoinSet::new();
+        for frame in frames {
+            let semaphore = semaphore.clone();
+            tasks.spawn(async move {
+                let _permit = semaphore
+                    .acquire_owned()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                let result = crate::ephemeris::jpl::identify_second_pass(
+                    frame.jd_utc,
+                    frame.center_ra_deg,
+                    frame.center_dec_deg,
+                    frame.radius_deg,
+                    station,
+                )
+                .await;
+                Ok::<_, String>((frame.frame_index, result))
+            });
+        }
+        while let Some(result) = tasks.join_next().await {
+            match result {
+                Ok(Ok((frame_index, Ok(mut precise)))) => {
+                    precise.truncate(limit);
+                    if let Some(frame) = grouped
+                        .iter_mut()
+                        .find(|frame| frame.frame_index == frame_index)
+                    {
+                        frame.objects = precise;
+                    }
+                }
+                Ok(Ok((frame_index, Err(error)))) => {
+                    log::warn!("frame {frame_index}: JPL second-pass unavailable; retaining local predictions: {error}");
+                }
+                Ok(Err(error)) => log::warn!("JPL refinement task failed: {error}"),
+                Err(error) => log::warn!("JPL refinement task join failed: {error}"),
+            }
+        }
+    }
     Ok(KnownObjectBatchResult {
         database: manifest,
         frames: grouped,
@@ -1444,7 +1492,6 @@ pub async fn match_tracklet(
     }
     let (m, orbits) = active_orbits(&state, mpc_root(&app)?).await?;
     tokio::task::spawn_blocking(move || {
-        let first = &request.points[0];
         let mut candidates: Vec<CandidateMatch> = orbits
             .par_iter()
             .filter_map(|o| {
@@ -1474,15 +1521,10 @@ pub async fn match_tracklet(
             .iter()
             .filter(|c| c.max_residual_arcsec <= 5.0)
             .collect();
-        let current = candidates
-            .first()
-            .and_then(|c| orbits.iter().find(|o| o.designation == c.designation))
-            .and_then(|o| propagate(o, first.jd_utc, request.station).ok())
-            .is_some_and(|p| p.quality == PropagationQuality::Current);
-        let (status, reason) = if probable.len() == 1 && !m.stale() && current {
+        let (status, reason) = if probable.len() == 1 && !m.stale() {
             (
-                MatchStatus::Probable,
-                "唯一候选在全部帧的 O-C 均不超过 5 arcsec；仍需人工确认".into(),
+                MatchStatus::Ambiguous,
+                "唯一的本地二体传播候选在全部帧的 O-C 均不超过 5 arcsec；需 JPL second-pass 或 MPC 复核".into(),
             )
         } else if candidates.is_empty() {
             (
@@ -1594,6 +1636,16 @@ pub fn save_app_config(
 ) -> Result<(), String> {
     crate::storage::save_config(&app, &config)
 }
+
+#[tauri::command]
+pub fn load_app_config_file(path: String) -> Result<crate::storage::AppConfig, String> {
+    crate::storage::load_config_file(std::path::Path::new(&path))
+}
+
+#[tauri::command]
+pub fn save_app_config_file(path: String, config: crate::storage::AppConfig) -> Result<(), String> {
+    crate::storage::save_config_file(std::path::Path::new(&path), &config)
+}
 #[tauri::command]
 pub fn get_storage_layout(app: tauri::AppHandle) -> Result<crate::storage::StorageLayout, String> {
     crate::storage::initialize(&app)
@@ -1636,17 +1688,9 @@ async fn solve_frame(
         image_height,
         upstream_seed,
     ) = {
-        let frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-        let data = frames.get(idx).ok_or("No frames loaded")?;
-        let observation_jd = data
-            .metadata
-            .date_obs
-            .as_deref()
-            .and_then(|value| AstroTime::from_fits_utc(value).ok())
-            .map(|time| {
-                time.midpoint(data.metadata.exposure.unwrap_or(0.0))
-                    .julian_date()
-            });
+        let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
+        let data = frames.get(idx)?;
+        let observation_jd = data.metadata.observation_midpoint_jd;
         let upstream_seed =
             data.metadata
                 .upstream_wcs
@@ -1670,7 +1714,7 @@ async fn solve_frame(
             data.metadata.rotation_deg,
             data.metadata.parity_flipped,
             observation_jd,
-            estimate_cone_radius(data),
+            estimate_cone_radius(&data),
             data.width,
             data.height,
             upstream_seed,
@@ -1740,6 +1784,7 @@ async fn solve_frame(
     );
     let match_params = params.clone();
     let catalog_sources = catalog.sources.clone();
+    let accept_review = params.accept_review.unwrap_or(false);
     let mut result = tokio::task::spawn_blocking(move || {
         compute_plate_solution(
             match_params,
@@ -1759,6 +1804,9 @@ async fn solve_frame(
     })
     .await
     .map_err(|e| format!("plate-matching worker failed: {e}"))?;
+    if accept_review {
+        result.confirm_review();
+    }
     persist_reduction_result(state, idx, &params, &catalog, &mut result)?;
     let mut analyses = state.frame_analyses.lock().map_err(|e| e.to_string())?;
     let analysis = analyses
@@ -1804,7 +1852,11 @@ fn compute_plate_solution(
                 seed.clone(),
                 matcher::MatchConfig {
                     max_image_sources: *reference_limit,
-                    max_catalog_sources: *reference_limit,
+                    // A manual/seeded alignment already constrains the transform.
+                    // Keep the image list selective, but search a wider Gaia pool
+                    // so saturated or otherwise missing bright stars do not crowd
+                    // the real counterparts out of both equally-sized lists.
+                    max_catalog_sources: catalog_sources.len().min(256),
                     maximum_rms_arcsec,
                     catalog_bright_limit_mag: params.catalog_bright_limit_mag,
                     catalog_faint_limit_mag: params.catalog_faint_limit_mag,
@@ -1975,11 +2027,11 @@ fn persist_reduction_result(
     result: &mut platesolve::PlateSolveResult,
 ) -> Result<(), String> {
     let (frame_path, provenance) = {
-        let frames = state
+        let mut frames = state
             .loaded_frames
             .lock()
             .map_err(|error| error.to_string())?;
-        let frame = frames.get(frame_index).ok_or("No frames loaded")?;
+        let frame = frames.get(frame_index)?;
         let pca: Vec<_> = frame
             .metadata
             .panstarrs_pca
@@ -2348,7 +2400,7 @@ pub async fn reduce_all_frames(
                 session.raw(effective_settings);
             }
             if let Ok(frames) = state.loaded_frames.lock() {
-                for (index, frame) in frames.iter().enumerate() {
+                for (index, frame) in frames.summaries().enumerate() {
                     session.line(
                         log::Level::Info,
                         &format!("frame {}/{} input", index + 1, total),
@@ -2469,11 +2521,11 @@ pub async fn reduce_all_frames(
         }
 
         let frame_hints = {
-            let frames = state
+            let mut frames = state
                 .loaded_frames
                 .lock()
                 .map_err(|error| error.to_string())?;
-            let frame = frames.get(frame_index).ok_or("Invalid frame index")?;
+            let frame = frames.get(frame_index)?;
             (
                 frame.metadata.ra,
                 frame.metadata.dec,
@@ -2862,8 +2914,8 @@ pub fn blink_get_state(state: State<AppState>) -> Result<BlinkState, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        detect_frame, midpoint_rfc3339, reference_count_attempts, solve_frame, AppState,
-        FrameAnalysis, SolveParams,
+        detect_frame, midpoint_adjustment_seconds, midpoint_rfc3339, reference_count_attempts,
+        solve_frame, AppState, FrameAnalysis, SolveParams,
     };
     use crate::{fits, project::sha256_file};
     use serde::Deserialize;
@@ -2888,8 +2940,21 @@ mod tests {
     fn report_midpoint_is_rounded_to_configured_time_precision() {
         let settings = crate::storage::TimeConfig::default();
         assert_eq!(
-            midpoint_rfc3339("2025-09-16T10:01:53.966548Z", 45.0, &settings).as_deref(),
+            midpoint_rfc3339("2025-09-16T10:01:53.966548Z", 45.0, &settings, None).as_deref(),
             Some("2025-09-16T10:02:16Z")
+        );
+    }
+
+    #[test]
+    fn standard_header_time_reference_overrides_date_obs_setting() {
+        let settings = crate::storage::TimeConfig::default();
+        assert_eq!(
+            midpoint_adjustment_seconds(40.0, &settings, Some("average")),
+            0.0
+        );
+        assert_eq!(
+            midpoint_adjustment_seconds(40.0, &settings, Some("begin")),
+            20.0
         );
     }
 
@@ -2924,7 +2989,7 @@ mod tests {
         {
             let mut loaded = state.loaded_frames.lock().unwrap();
             for path in &paths {
-                loaded.push(load_golden(path));
+                loaded.push_loaded(load_golden(path));
             }
         }
         *state.frame_analyses.lock().unwrap() = vec![FrameAnalysis::default(); paths.len()];

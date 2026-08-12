@@ -6,10 +6,11 @@
 
 ### 图像加载与显示
 
-- 同时打开多张 FITS 图像（`.fits` / `.fit` / `.fts`）
-- 自动读取 FITS 头信息：目标名称、RA/Dec、曝光时长、滤镜、观测时间、焦距、像元大小、像素尺度、旋转与镜像
-- ZScale 自动拉伸，支持线性（Linear）与 Asinh 两种显示模式
+- 通过内置 CFITSIO 读取多 HDU、tile-compressed FITS 与 `.fits.fz`
+- 自动读取 FITS 头信息：十进制/六十进制 RA/Dec、曝光、滤镜、多种观测时间、焦距、像元、尺度、旋转与镜像；无法解析的已存在字段会记录 warning
+- ZScale 自动定标，WebGL2 单通道浮点纹理支持 Linear/Asinh shader 拉伸
 - 反色显示、适应窗口、帧列表快速切换
+- 后端科学像素使用按字节计费的 LRU；前端只缓存当前帧和下一帧，每帧保留独立尺寸
 
 ### 底片解算（Data Reduction）
 
@@ -27,7 +28,7 @@
 
 ### 目标测量
 
-- 点击标记可疑目标，支持二维 PSF 拟合与孔径质心两种测量方式
+- 点击标记可疑目标，支持 Gaussian-window 质心定位与 SEP 亚像素孔径测光
 - 输出 RA/Dec、流量、SNR、FWHM、椭圆率与测量不确定度
 - 光度定标后获得星等（含误差与波段）
 - 测量列表：确认、重命名、删除，支持 MPC trkSub 命名规则校验
@@ -35,7 +36,9 @@
 ### 已知天体标注
 
 - 下载并自动更新 MPCORB 轨道数据库
-- 一次计算整组图像中已知小行星的位置并叠加显示，方便区分已知对象与新发现候选
+- 本地二体传播用于整场快速候选预筛；结果明确标记为本地预测，缺少 DUT1/EOP 时标记为降级时间
+- 联网时自动使用 JPL Small-Body Identification `two-pass=true` 精化整场结果；服务不可用时保留本地候选并记录 warning
+- MPC MPChecker 用于已测量目标的人工交叉检查；严格离线高精度留给未来的 OpenOrb sidecar
 
 ### Tracklet 匹配
 
@@ -78,8 +81,14 @@ Sky Eye 支持 **Windows x64**、**macOS（Apple Silicon 与 Intel）** 与 **Li
 ## 联网与数据说明
 
 - **离线可用**：图像处理与底片解算完全离线运行。
-- **需要联网**：VizieR 参考星表查询（Gaia DR3、ATLAS REFCAT2）与 MPCORB 轨道数据库下载。
+- **需要联网**：VizieR 参考星表查询（Gaia DR3、ATLAS REFCAT2）、MPCORB 数据更新以及已知天体的在线精确复核。
+
+## 算法边界与路线图
+
+- 当前测量主线是 Gaussian-window 迭代质心 + SEP 孔径测光；二维椭圆高斯 PSF 拟合尚未实现。
+- UTC 使用 ERFA 两段式 JD，经 UTC → TAI → TT 处理闰秒；站心计算另走 UTC → UT1。没有新鲜 DUT1 时不会静默宣称精确。
+- 二维椭圆高斯 PSF、MPChecker 快捷复核入口，以及严格离线的 OpenOrb sidecar 保留在路线图中。
 
 ## 反馈
 
-Sky Eye 目前处于早期版本（v0.1.0），功能正在持续开发中。如遇问题或有功能建议，欢迎在 [GitHub Issues](https://github.com/MrSibe/sky-eye/issues) 提交反馈。
+Sky Eye 目前处于早期版本（v0.2.0-rc.1），功能正在持续开发中。如遇问题或有功能建议，欢迎在 [GitHub Issues](https://github.com/MrSibe/sky-eye/issues) 提交反馈。

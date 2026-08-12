@@ -37,8 +37,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::load_frames,
             commands::close_all_images,
-            commands::get_raw_pixels,
-            commands::get_frame_pixels,
             commands::get_frame_pixel_buffer,
             commands::detect_stars,
             commands::get_frame_analysis,
@@ -65,6 +63,8 @@ pub fn run() {
             commands::export_report,
             commands::get_app_config,
             commands::save_app_config,
+            commands::load_app_config_file,
+            commands::save_app_config_file,
             commands::get_storage_layout,
             commands::write_frontend_log,
             commands::plate_solve,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getVersion } from '@tauri-apps/api/app'
+import { open, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { check } from '@tauri-apps/plugin-updater'
 import {
@@ -16,7 +17,13 @@ import {
   Telescope,
   X,
 } from 'lucide-react'
-import type { AppConfig, MpcorbManifest } from '../lib/tauri'
+import {
+  loadAppConfigFile,
+  saveAppConfigFile,
+  getStorageLayout,
+  type AppConfig,
+  type MpcorbManifest,
+} from '../lib/tauri'
 import { Button } from './ui/button'
 import { controlClassName, Field, Input, Select } from './ui/form'
 
@@ -142,6 +149,48 @@ export function SettingsDialog({
   const [updateProgress, setUpdateProgress] = useState<number | null>(null)
   const [mpcorbError, setMpcorbError] = useState<string | null>(null)
   const checkedUpdate = useRef(false)
+  const openConfigFile = async () => {
+    try {
+      const layout = await getStorageLayout()
+      const selected = await open({
+        multiple: false,
+        defaultPath: layout.presets_dir,
+        filters: [{ name: 'Sky Eye 设置', extensions: ['json'] }],
+      })
+      if (!selected || Array.isArray(selected)) return
+      const next = await loadAppConfigFile(selected)
+      setDraft(next)
+      setJsonText(JSON.stringify(next, null, 2))
+      setError(null)
+    } catch (reason) {
+      setError(`无法打开设置文件：${String(reason)}`)
+    }
+  }
+
+  const saveConfigFile = async () => {
+    if (!draft) return
+    let value = draft
+    if (tab === 'json') {
+      try {
+        value = JSON.parse(jsonText) as AppConfig
+      } catch (reason) {
+        setError(`JSON 格式错误：${String(reason)}`)
+        return
+      }
+    }
+    try {
+      const layout = await getStorageLayout()
+      const destination = await saveDialog({
+        defaultPath: `${layout.presets_dir}/${value.station.mpc_code || 'SkyEye'}.json`,
+        filters: [{ name: 'Sky Eye 设置', extensions: ['json'] }],
+      })
+      if (!destination) return
+      await saveAppConfigFile(destination, value)
+      setError(null)
+    } catch (reason) {
+      setError(`无法保存设置文件：${String(reason)}`)
+    }
+  }
 
   const checkSoftwareUpdate = useCallback(async () => {
     setUpdateStatus('checking')
@@ -424,6 +473,27 @@ export function SettingsDialog({
                             },
                           })
                         }
+                      />
+                    </Field>
+                    <Field label="DUT1 · 秒（填写时更新 EOP 时间）">
+                      <Input
+                        type="number"
+                        min="-1"
+                        max="1"
+                        step="0.001"
+                        value={draft.station.dut1_seconds ?? ''}
+                        onChange={(e) => {
+                          const dut1 = optionalNumber(e.target.value)
+                          setDraft({
+                            ...draft,
+                            station: {
+                              ...draft.station,
+                              dut1_seconds: dut1,
+                              eop_updated_unix:
+                                dut1 == null ? undefined : Math.floor(Date.now() / 1000),
+                            },
+                          })
+                        }}
                       />
                     </Field>
                   </div>
@@ -827,17 +897,17 @@ export function SettingsDialog({
                         }
                       />
                     </Field>
-                    <Field label="PSF 拟合 RMS">
+                    <Field label="质心收敛 RMS">
                       <Input
                         type="number"
                         step="0.01"
-                        value={draft.reduction.maximum_psf_fit_rms}
+                        value={draft.reduction.maximum_centroid_fit_rms}
                         onChange={(e) =>
                           setDraft({
                             ...draft,
                             reduction: {
                               ...draft.reduction,
-                              maximum_psf_fit_rms: Number(e.target.value),
+                              maximum_centroid_fit_rms: Number(e.target.value),
                             },
                           })
                         }
@@ -867,13 +937,12 @@ export function SettingsDialog({
                             ...draft,
                             reduction: {
                               ...draft.reduction,
-                              centroid_method: e.target.value as 'psf' | 'aperture',
+                              centroid_method: e.target.value as 'gaussian_window',
                             },
                           })
                         }
                       >
-                        <option value="psf">二维 PSF</option>
-                        <option value="aperture">孔径质心</option>
+                        <option value="gaussian_window">Gaussian-window 质心</option>
                       </Select>
                     </Field>
                   </div>
@@ -1530,7 +1599,15 @@ export function SettingsDialog({
           <footer className="shrink-0 border-t border-sky-hairline bg-sky-canvas-soft px-6 py-3">
             {error && <p className="mb-2 text-[10px] leading-4 text-sky-error">{error}</p>}
             <div className="flex items-center justify-between gap-4">
-              <span className="font-mono text-[9px] text-sky-mute">config/settings.json</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] text-sky-mute">config/settings.json</span>
+                <Button variant="ghost" size="sm" onClick={openConfigFile} disabled={saving}>
+                  打开 JSON
+                </Button>
+                <Button variant="ghost" size="sm" onClick={saveConfigFile} disabled={saving}>
+                  另存为 JSON
+                </Button>
+              </div>
               <div className="flex gap-2">
                 <Button
                   variant="ghost"

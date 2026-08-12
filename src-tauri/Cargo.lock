@@ -623,85 +623,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "celestial-coords"
-version = "0.1.1-alpha.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "594a49022c6b050098689417c6ec2088e71afca4f373ba393b67d24198731010"
-dependencies = [
- "celestial-core",
- "celestial-eop-data",
- "celestial-time",
- "libm",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "celestial-core"
-version = "0.1.1-alpha.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "835075a735ed05c33feab0b629a3e95bc55c9b54a04924438ed31157d1cbb43c"
-dependencies = [
- "libm",
- "once_cell",
- "regex",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "celestial-eop-data"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0db7627f7cbdcaed155e66503e07025e10701a3566bc211a85e35b918bc40812"
-dependencies = [
- "zstd",
-]
-
-[[package]]
-name = "celestial-images"
-version = "0.1.1-alpha.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b82f453aa46c329b1a7e196308e2c8b7af0f62e2c68710cba0c99c6a6b1d81b8"
-dependencies = [
- "byteorder",
- "celestial-core",
- "celestial-time",
- "celestial-wcs",
- "crc32fast",
- "flate2",
- "libm",
- "lz4_flex",
- "memmap2",
- "ndarray 0.15.6",
- "num-traits",
- "quick-xml 0.31.0",
- "rayon",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "celestial-time"
-version = "0.1.1-alpha.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64dc8dcb28d44f81c0c19de5a2c700f5920390b9cb4789a43e2e696a815a4f0e"
-dependencies = [
- "celestial-core",
- "libm",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "celestial-wcs"
-version = "0.1.1-alpha.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91a8ba4001deac572ba0c08f0ef74fe90e91da89210cca72dd6a9dfb8585b1b8"
-dependencies = [
- "celestial-coords",
- "celestial-core",
- "libm",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "cesu8"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1403,7 +1324,7 @@ checksum = "9b2a7b7eee7f284a95437774d1152e04706f690d549687004ab7ae73cc776d08"
 dependencies = [
  "fitsio-sys",
  "libc",
- "ndarray 0.17.2",
+ "ndarray",
 ]
 
 [[package]]
@@ -2700,15 +2621,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
-name = "lz4_flex"
-version = "0.11.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
-dependencies = [
- "twox-hash",
-]
-
-[[package]]
 name = "markup5ever"
 version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2744,15 +2656,6 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
-
-[[package]]
-name = "memmap2"
-version = "0.9.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1219ed1b7f229ee7104d281dd01d6802fe28bb6e95d292942c4daacdeb798c0"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "memoffset"
@@ -2886,19 +2789,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.118",
-]
-
-[[package]]
-name = "ndarray"
-version = "0.15.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adb12d4e967ec485a5f71c6311fe28158e9d6f4bc4a447b474184d0f91a8fa32"
-dependencies = [
- "matrixmultiply",
- "num-complex",
- "num-integer",
- "num-traits",
- "rawpointer",
 ]
 
 [[package]]
@@ -3519,7 +3409,7 @@ checksum = "7da1d65da6dd5d1e44199ac0f58712d241c0f439f80adea8924d832384087f85"
 dependencies = [
  "base64 0.22.1",
  "indexmap 2.14.0",
- "quick-xml 0.41.0",
+ "quick-xml",
  "serde",
  "time",
 ]
@@ -3733,15 +3623,6 @@ name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
-
-[[package]]
-name = "quick-xml"
-version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1004a344b30a54e2ee58d66a71b32d2db2feb0a31f9a2d302bf0536f15de2a33"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "quick-xml"
@@ -4705,20 +4586,20 @@ checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
 name = "sky-eye"
-version = "0.1.0"
+version = "0.2.0-rc.1"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
- "celestial-images",
  "delaunator",
  "erfars",
  "fitsio",
+ "fitsio-sys",
  "flate2",
  "hex",
  "imageproc",
  "log",
  "nalgebra 0.34.2",
- "ndarray 0.17.2",
+ "ndarray",
  "num-traits",
  "rayon",
  "reqwest",
@@ -5742,12 +5623,6 @@ name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
-
-[[package]]
-name = "twox-hash"
-version = "2.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "typeid"
@@ -6910,34 +6785,6 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[package]]
-name = "zstd"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
-dependencies = [
- "zstd-safe",
-]
-
-[[package]]
-name = "zstd-safe"
-version = "7.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f49c4d5f0abb602a93fb8736af2a4f4dd9512e36f7f570d66e65ff867ed3b9d"
-dependencies = [
- "zstd-sys",
-]
-
-[[package]]
-name = "zstd-sys"
-version = "2.0.16+zstd.1.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91e19ebc2adc8f83e43039e79776e3fda8ca919132d68a1fed6a5faca2683748"
-dependencies = [
- "cc",
- "pkg-config",
-]
 
 [[package]]
 name = "zune-core"

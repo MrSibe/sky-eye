@@ -58,6 +58,7 @@ export interface PlateSolveResult {
     rejection_reason: string | null
   }>
   quality: AstrometricQuality | null
+  manual_review_confirmed: boolean
 }
 
 export interface AstrometricQuality {
@@ -162,6 +163,11 @@ export interface FrameMeta {
   exposure: number | null
   filter: string | null
   date_obs: string | null
+  selected_hdu: number
+  image_hdu_count: number
+  timesys: string
+  time_reference: string | null
+  diagnostics: string[]
   observation_midpoint_jd: number | null
   focal_length: number | null
   pixel_size: number | null

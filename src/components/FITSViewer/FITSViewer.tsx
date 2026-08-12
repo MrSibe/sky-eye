@@ -3,8 +3,11 @@ import { useFitsStore } from '../../stores/fitsStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { GaiaCalibrationOverlay, type ManualCalibrationState } from '../ManualCalibration'
 import type { EphemerisPoint, TargetMeasurement } from '../../lib/tauri'
+import { zscale } from '../../lib/stretch'
 
 interface FITSViewerProps {
+  stretchMode?: 'linear' | 'asinh'
+  inverted?: boolean
   manualCalibration?: ManualCalibrationState | null
   onManualOffsetChange?: (x: number, y: number) => void
   measurementMode?: boolean
@@ -100,6 +103,8 @@ function skyToPixel(
 }
 
 export function FITSViewer({
+  stretchMode = 'linear',
+  inverted = true,
   manualCalibration,
   onManualOffsetChange,
   measurementMode = false,
@@ -114,11 +119,22 @@ export function FITSViewer({
   const cursorImagePos = useRef<{ x: number; y: number } | null>(null)
   const [cursorMeasurement, setCursorMeasurement] = useState<CursorMeasurement | null>(null)
 
-  const { imageData, zoom, panX, panY, fitRequest, setZoom, setPan, resetView } = useFitsStore()
+  const {
+    rawPixels,
+    width: imageWidth,
+    height: imageHeight,
+    zoom,
+    panX,
+    panY,
+    fitRequest,
+    stretchLimits,
+    setZoom,
+    setPan,
+    resetView,
+    setStretchLimits,
+  } = useFitsStore()
 
   const { framePixels, currentFrameIndex, wcs, solveSuccess } = useSessionStore()
-  const imageWidth = imageData?.width
-  const imageHeight = imageData?.height
 
   useEffect(() => {
     if (!imageWidth || !imageHeight || !containerRef.current) return
@@ -132,7 +148,7 @@ export function FITSViewer({
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container || !imageData) return
+    if (!container || !imageWidth || !imageHeight) return
 
     const keepImageReachable = () => {
       const state = useFitsStore.getState()
@@ -141,8 +157,8 @@ export function FITSViewer({
         state.panY,
         container.clientWidth,
         container.clientHeight,
-        imageData.width,
-        imageData.height,
+        imageWidth,
+        imageHeight,
         state.zoom,
       )
       if (next.x !== state.panX || next.y !== state.panY) {
@@ -154,19 +170,97 @@ export function FITSViewer({
     const observer = new ResizeObserver(keepImageReachable)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [imageData, zoom])
+  }, [imageHeight, imageWidth, zoom])
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !imageData) return
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    canvas.width = imageData.width
-    canvas.height = imageData.height
-    ctx.putImageData(imageData, 0, 0)
-  }, [imageData])
+    if (!canvas || !rawPixels || !imageWidth || !imageHeight) return
+    const gl = canvas.getContext('webgl2', { alpha: false, antialias: false })
+    if (!gl) return
+    const vertexSource = `#version 300 es
+      in vec2 position;
+      out vec2 uv;
+      void main() { uv = position * 0.5 + 0.5; gl_Position = vec4(position, 0.0, 1.0); }`
+    const fragmentSource = `#version 300 es
+      precision highp float;
+      uniform sampler2D image;
+      uniform float blackPoint;
+      uniform float whitePoint;
+      uniform bool useAsinh;
+      uniform bool inverted;
+      in vec2 uv;
+      out vec4 color;
+      void main() {
+        float source = texture(image, vec2(uv.x, 1.0 - uv.y)).r;
+        float value = clamp((source - blackPoint) / max(whitePoint - blackPoint, 1.0e-20), 0.0, 1.0);
+        if (useAsinh) value = asinh(value * 10.0) / asinh(10.0);
+        if (inverted) value = 1.0 - value;
+        if (isnan(source) || isinf(source)) value = inverted ? 1.0 : 0.0;
+        color = vec4(value, value, value, 1.0);
+      }`
+    const compile = (type: number, source: string) => {
+      const shader = gl.createShader(type)
+      if (!shader) throw new Error('WebGL2 shader allocation failed')
+      gl.shaderSource(shader, source)
+      gl.compileShader(shader)
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(gl.getShaderInfoLog(shader) ?? 'WebGL2 shader compile failed')
+      }
+      return shader
+    }
+    const program = gl.createProgram()
+    if (!program) return
+    const vertex = compile(gl.VERTEX_SHADER, vertexSource)
+    const fragment = compile(gl.FRAGMENT_SHADER, fragmentSource)
+    gl.attachShader(program, vertex)
+    gl.attachShader(program, fragment)
+    gl.linkProgram(program)
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program) ?? 'WebGL2 program link failed')
+    }
+    canvas.width = imageWidth
+    canvas.height = imageHeight
+    gl.viewport(0, 0, imageWidth, imageHeight)
+    gl.useProgram(program)
+    const vertices = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertices)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
+    const position = gl.getAttribLocation(program, 'position')
+    gl.enableVertexAttribArray(position)
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
+    const texture = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.R32F,
+      imageWidth,
+      imageHeight,
+      0,
+      gl.RED,
+      gl.FLOAT,
+      rawPixels,
+    )
+    const limits = stretchLimits ?? zscale(rawPixels, imageWidth, imageHeight)
+    if (!stretchLimits) setStretchLimits(limits)
+    gl.uniform1f(gl.getUniformLocation(program, 'blackPoint'), limits.z1)
+    gl.uniform1f(gl.getUniformLocation(program, 'whitePoint'), limits.z2)
+    gl.uniform1i(gl.getUniformLocation(program, 'useAsinh'), stretchMode === 'asinh' ? 1 : 0)
+    gl.uniform1i(gl.getUniformLocation(program, 'inverted'), inverted ? 1 : 0)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    return () => {
+      gl.deleteTexture(texture)
+      gl.deleteBuffer(vertices)
+      gl.deleteShader(vertex)
+      gl.deleteShader(fragment)
+      gl.deleteProgram(program)
+    }
+  }, [imageHeight, imageWidth, inverted, rawPixels, setStretchLimits, stretchLimits, stretchMode])
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -194,33 +288,27 @@ export function FITSViewer({
 
   const updateCursorMeasurement = useCallback(
     (x: number, y: number) => {
-      if (!imageData) {
+      if (!rawPixels || !imageWidth || !imageHeight) {
         setCursorMeasurement(null)
         return
       }
       const pixelX = Math.floor(x)
       const pixelY = Math.floor(y)
-      const pixels = framePixels[currentFrameIndex]
+      const pixels = framePixels[currentFrameIndex]?.pixels
 
-      if (
-        pixels &&
-        pixelX >= 0 &&
-        pixelX < imageData.width &&
-        pixelY >= 0 &&
-        pixelY < imageData.height
-      ) {
+      if (pixels && pixelX >= 0 && pixelX < imageWidth && pixelY >= 0 && pixelY < imageHeight) {
         const sky = wcs && solveSuccess ? pixelToSky(x, y, wcs) : null
         setCursorMeasurement({
           x,
           y,
-          value: pixels[pixelY * imageData.width + pixelX],
+          value: pixels[pixelY * imageWidth + pixelX],
           ...(sky ?? {}),
         })
       } else {
         setCursorMeasurement(null)
       }
     },
-    [currentFrameIndex, framePixels, imageData, solveSuccess, wcs],
+    [currentFrameIndex, framePixels, imageHeight, imageWidth, rawPixels, solveSuccess, wcs],
   )
 
   useEffect(() => {
@@ -230,14 +318,14 @@ export function FITSViewer({
 
   const handleImagePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!imageData) return
+      if (!rawPixels || !imageWidth || !imageHeight) return
       const bounds = e.currentTarget.getBoundingClientRect()
-      const x = ((e.clientX - bounds.left) * imageData.width) / bounds.width
-      const y = ((e.clientY - bounds.top) * imageData.height) / bounds.height
+      const x = ((e.clientX - bounds.left) * imageWidth) / bounds.width
+      const y = ((e.clientY - bounds.top) * imageHeight) / bounds.height
       cursorImagePos.current = { x, y }
       updateCursorMeasurement(x, y)
     },
-    [imageData, updateCursorMeasurement],
+    [imageHeight, imageWidth, rawPixels, updateCursorMeasurement],
   )
 
   const handleCanvasPointerMove = useCallback(
@@ -247,20 +335,20 @@ export function FITSViewer({
         const dy = e.clientY - lastPos.current.y
         lastPos.current = { x: e.clientX, y: e.clientY }
         const container = containerRef.current
-        if (!container || !imageData) return
+        if (!container || !imageWidth || !imageHeight) return
         const next = clampImagePan(
           panX + dx,
           panY + dy,
           container.clientWidth,
           container.clientHeight,
-          imageData.width,
-          imageData.height,
+          imageWidth,
+          imageHeight,
           zoom,
         )
         setPan(next.x, next.y)
       }
     },
-    [imageData, panX, panY, setPan, zoom],
+    [imageHeight, imageWidth, panX, panY, setPan, zoom],
   )
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -272,14 +360,14 @@ export function FITSViewer({
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!measurementMode || !onMeasure || !imageData) return
+      if (!measurementMode || !onMeasure || !imageWidth || !imageHeight) return
       const b = e.currentTarget.getBoundingClientRect()
       onMeasure(
-        ((e.clientX - b.left) * imageData.width) / b.width,
-        ((e.clientY - b.top) * imageData.height) / b.height,
+        ((e.clientX - b.left) * imageWidth) / b.width,
+        ((e.clientY - b.top) * imageHeight) / b.height,
       )
     },
-    [imageData, measurementMode, onMeasure],
+    [imageHeight, imageWidth, measurementMode, onMeasure],
   )
 
   return (
@@ -292,7 +380,7 @@ export function FITSViewer({
       onPointerCancel={handlePointerUp}
       onContextMenu={(event) => event.preventDefault()}
     >
-      {imageData ? (
+      {rawPixels && imageWidth > 0 && imageHeight > 0 ? (
         <>
           <div
             className="absolute cursor-crosshair"
@@ -304,8 +392,8 @@ export function FITSViewer({
               transformOrigin: 'center center',
               left: '50%',
               top: '50%',
-              width: imageData.width,
-              height: imageData.height,
+              width: imageWidth,
+              height: imageHeight,
             }}
             onPointerMove={handleImagePointerMove}
             onClick={handleClick}
@@ -317,15 +405,15 @@ export function FITSViewer({
             <canvas ref={canvasRef} className="absolute inset-0" />
             {manualCalibration && onManualOffsetChange && (
               <GaiaCalibrationOverlay
-                width={imageData.width}
-                height={imageData.height}
+                width={imageWidth}
+                height={imageHeight}
                 calibration={manualCalibration}
                 onOffsetChange={onManualOffsetChange}
               />
             )}
             <svg
               className="pointer-events-none absolute inset-0 h-full w-full"
-              viewBox={`0 0 ${imageData.width} ${imageData.height}`}
+              viewBox={`0 0 ${imageWidth} ${imageHeight}`}
             >
               {measurements
                 .filter((m) => m.frame_index === currentFrameIndex)
@@ -334,51 +422,31 @@ export function FITSViewer({
                     <circle
                       cx={m.x}
                       cy={m.y}
-                      r={8 / zoom}
+                      r={Math.max(4 / zoom, m.aperture_radius_px)}
                       fill="none"
                       stroke="#fb7185"
                       strokeWidth={1.5 / zoom}
-                    />
-                    <line
-                      x1={m.x - 12 / zoom}
-                      y1={m.y}
-                      x2={m.x + 12 / zoom}
-                      y2={m.y}
-                      stroke="#fb7185"
-                      strokeWidth={1 / zoom}
-                    />
-                    <line
-                      x1={m.x}
-                      y1={m.y - 12 / zoom}
-                      x2={m.x}
-                      y2={m.y + 12 / zoom}
-                      stroke="#fb7185"
-                      strokeWidth={1 / zoom}
                     />
                   </g>
                 ))}
               {wcs &&
                 knownObjects.map((o) => {
                   const p = skyToPixel(o.ra_deg, o.dec_deg, wcs)
-                  return p &&
-                    p.x >= 0 &&
-                    p.y >= 0 &&
-                    p.x < imageData.width &&
-                    p.y < imageData.height ? (
+                  return p && p.x >= 0 && p.y >= 0 && p.x < imageWidth && p.y < imageHeight ? (
                     <g key={o.designation}>
                       <circle
                         cx={p.x}
                         cy={p.y}
                         r={10 / zoom}
                         fill="none"
-                        stroke={o.quality === 'current' ? '#22d3ee' : '#f59e0b'}
+                        stroke={o.quality !== 'degraded_time' ? '#22d3ee' : '#f59e0b'}
                         strokeWidth={1.4 / zoom}
                       />
                       <text
                         x={p.x + 12 / zoom}
                         y={p.y - 8 / zoom}
                         fontSize={11 / zoom}
-                        fill={o.quality === 'current' ? '#22d3ee' : '#f59e0b'}
+                        fill={o.quality !== 'degraded_time' ? '#22d3ee' : '#f59e0b'}
                       >
                         {o.designation}
                       </text>

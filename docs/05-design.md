@@ -170,7 +170,7 @@ components:
     backgroundColor: '{colors.canvas-viewer}'
     rounded: '{rounded.none}'
     border: 'none'
-    description: 'Canvas-based FITS image display. Always pitch-black background. User controls: zoom, pan, stretch mode selector in a floating toolbar.'
+    description: 'WebGL2 FITS image display using a single-channel float texture and fragment-shader stretch. Always pitch-black background. User controls: zoom, pan, stretch mode selector in a floating toolbar.'
 
   fits-toolbar:
     backgroundColor: '{colors.canvas}'

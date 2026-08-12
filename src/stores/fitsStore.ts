@@ -6,7 +6,6 @@ interface FitsState {
   filePath: string | null
   meta: FitsMeta | null
   rawPixels: Float32Array | null
-  imageData: ImageData | null
   width: number
   height: number
   isLoading: boolean
@@ -15,11 +14,11 @@ interface FitsState {
   panX: number
   panY: number
   fitRequest: number
+  stretchLimits: { z1: number; z2: number } | null
 
   setFilePath: (path: string | null) => void
   setMeta: (meta: FitsMeta | null) => void
   setRawPixels: (pixels: Float32Array | null, width: number, height: number) => void
-  setImageData: (data: ImageData | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   setZoom: (zoom: number) => void
@@ -28,13 +27,13 @@ interface FitsState {
   setPan: (x: number, y: number) => void
   resetView: () => void
   requestFit: () => void
+  setStretchLimits: (limits: { z1: number; z2: number } | null) => void
 }
 
 export const useFitsStore = create<FitsState>((set) => ({
   filePath: null,
   meta: null,
   rawPixels: null,
-  imageData: null,
   width: 0,
   height: 0,
   isLoading: false,
@@ -43,16 +42,11 @@ export const useFitsStore = create<FitsState>((set) => ({
   panX: 0,
   panY: 0,
   fitRequest: 0,
+  stretchLimits: null,
 
   setFilePath: (path) => set({ filePath: path }),
   setMeta: (meta) => set({ meta }),
   setRawPixels: (pixels, width, height) => set({ rawPixels: pixels, width, height }),
-  setImageData: (data) =>
-    set({
-      imageData: data,
-      width: data?.width ?? 0,
-      height: data?.height ?? 0,
-    }),
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => {
     if (error) writeFrontendLog('error', error, 'ui-error')
@@ -64,4 +58,5 @@ export const useFitsStore = create<FitsState>((set) => ({
   setPan: (x, y) => set({ panX: x, panY: y }),
   resetView: () => set({ zoom: 1.0, panX: 0, panY: 0 }),
   requestFit: () => set((state) => ({ fitRequest: state.fitRequest + 1 })),
+  setStretchLimits: (stretchLimits) => set({ stretchLimits }),
 }))

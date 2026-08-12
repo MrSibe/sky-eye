@@ -1,0 +1,4 @@
+[env]
+# fitsio-sys 0.5.7 enables POSIX pthreads unconditionally in its CMake path.
+# Force the supported native Windows synchronization path for MSVC builds.
+CMAKE_TOOLCHAIN_FILE = { value = "cmake/cfitsio-platform.cmake", relative = true }

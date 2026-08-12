@@ -7,6 +7,9 @@ use tokio_util::sync::CancellationToken;
 
 const VIZIER_TAP_SYNC: &str = "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync";
 const GAIA_DR3_TABLE: &str = "I/355/gaiadr3";
+// TAPVizieR exposes very large catalogues through a dedicated schema. The
+// unqualified legacy table identifier is no longer resolved by the service.
+const GAIA_DR3_TAP_SCHEMA: &str = "large_tables";
 const GAIA_REFERENCE_EPOCH: f64 = 2016.0;
 const J2000_JD: f64 = 2_451_545.0;
 
@@ -232,7 +235,7 @@ fn build_gaia_adql(query: &GaiaQuery, max_rows: u32) -> String {
     format!(
         "SELECT TOP {max_rows} Source, RA_ICRS, DE_ICRS, e_RA_ICRS, e_DE_ICRS, \
          pmRA, pmDE, e_pmRA, e_pmDE, RADEcor, Plx, e_Plx, RUWE, Dup, Solved, Gmag \
-         FROM \"{GAIA_DR3_TABLE}\" \
+         FROM \"{GAIA_DR3_TAP_SCHEMA}\".\"{GAIA_DR3_TABLE}\" \
          WHERE Gmag IS NOT NULL AND 1=CONTAINS(POINT('ICRS', RA_ICRS, DE_ICRS), \
          CIRCLE('ICRS', {:.10}, {:.10}, {:.10})) ORDER BY Gmag ASC",
         query.ra_deg, query.dec_deg, query.radius_deg
@@ -450,7 +453,7 @@ mod tests {
         };
         let adql = build_gaia_adql(&query, 10_000);
         assert!(adql.contains("TOP 10000"));
-        assert!(adql.contains("\"I/355/gaiadr3\""));
+        assert!(adql.contains("FROM \"large_tables\".\"I/355/gaiadr3\""));
         assert!(adql.contains("CIRCLE('ICRS', 3.0599900000, -11.3700180000, 0.5000000000)"));
     }
 

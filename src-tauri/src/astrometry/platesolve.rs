@@ -20,6 +20,7 @@ pub struct PlateSolveResult {
     pub message: String,
     pub matches: Vec<AstrometricMatch>,
     pub quality: Option<AstrometricQuality>,
+    pub manual_review_confirmed: bool,
 }
 
 pub fn missing_hint(message: &str) -> PlateSolveResult {
@@ -36,6 +37,7 @@ pub fn missing_hint(message: &str) -> PlateSolveResult {
         message: message.to_string(),
         matches: Vec::new(),
         quality: None,
+        manual_review_confirmed: false,
     }
 }
 
@@ -53,6 +55,7 @@ pub fn match_failed(num_catalog: u32, message: String) -> PlateSolveResult {
         message: format!("归算失败：{message}"),
         matches: Vec::new(),
         quality: None,
+        manual_review_confirmed: false,
     }
 }
 
@@ -105,5 +108,25 @@ pub fn solved(
         message,
         matches: solution.matches,
         quality: Some(quality),
+        manual_review_confirmed: false,
+    }
+}
+
+impl PlateSolveResult {
+    /// Promote only a reviewable solution after an explicit operator action.
+    /// Rejected solutions remain rejected, so weak geometry or excessive
+    /// residuals cannot be bypassed through the manual-alignment workflow.
+    pub fn confirm_review(&mut self) {
+        if self.status != ReductionStatus::ReviewRequired || self.wcs.is_none() {
+            return;
+        }
+        self.success = true;
+        self.status = ReductionStatus::Accepted;
+        self.failure_code = None;
+        self.manual_review_confirmed = true;
+        if let Some(quality) = &mut self.quality {
+            quality.status = ReductionStatus::Accepted;
+        }
+        self.message = format!("人工复核通过：{}", self.message);
     }
 }

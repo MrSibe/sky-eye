@@ -6,7 +6,7 @@
 
 **Architecture:** Tauri v2 + React + TypeScript + Vite 前端；Rust 后端负责 FITS 读取、像素处理和直方图拉伸。前后端通过 Tauri IPC invoke 通信。
 
-**Tech Stack:** Tauri v2, React 18, TypeScript, Tailwind CSS, celestial-images (FITS I/O), ndarray (数组运算), shadcn/ui
+**Tech Stack:** Tauri v2, React 18, TypeScript, Tailwind CSS, fitsio/CFITSIO (FITS I/O), ndarray (数组运算), shadcn/ui
 
 ---
 
@@ -120,7 +120,8 @@ export default defineConfig({
 
 ```bash
 cd D:\MyWork\sky-eye\src-tauri
-cargo add celestial-images ndarray serde serde_json
+cargo add fitsio --features array,fitsio-src,src-cmake
+cargo add ndarray serde serde_json
 cargo add --features tauri tauri
 ```
 

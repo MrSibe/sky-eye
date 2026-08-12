@@ -3,6 +3,7 @@ import { ListChecks, Trash2, X } from 'lucide-react'
 import type { TargetMeasurement } from '../lib/tauri'
 import { validateTrackletDesignation } from '../lib/mpcDesignation'
 import { Button } from './ui/button'
+import { openUrl } from '@tauri-apps/plugin-opener'
 
 interface Props {
   measurements: TargetMeasurement[]
@@ -151,6 +152,14 @@ export function SciencePanel(p: Props) {
             {!p.canMatch && '如需轨迹匹配，请先在“设置 > 数据管理”下载 MPCORB。'}
           </div>
           <div className="flex shrink-0 gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void openUrl('https://minorplanetcenter.net/cgi-bin/checkmp.cgi')}
+              disabled={p.busy || p.measurements.length === 0}
+            >
+              MPC MPChecker
+            </Button>
             <Button
               size="sm"
               variant="ghost"

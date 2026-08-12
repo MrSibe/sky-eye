@@ -28,8 +28,8 @@ Rust scientific core
   ├─ ades          PSV/XML 生成和校验
   └─ project       SQLite、配置、provenance
                   │
-可选原生/外部后端
-  ├─ CFITSIO：完整 FITS 与压缩支持
+原生/外部后端
+  ├─ CFITSIO：默认且唯一的 FITS 与压缩读取后端
   └─ Find_Orb/Astrometry.net sidecar：显式配置后使用
 ```
 
@@ -75,19 +75,26 @@ Data Reduction 主路径是 near solve：
 
 多帧归算以“一次操作、逐帧独立结果”执行：首个成功帧完整求解，后续帧复用上一成功帧的中心、尺度、旋转和镜像作为 tracking hint，但每帧仍重新检测、关联 Gaia、拟合并验证自己的 WCS；失败帧不得继承前帧结果。
 
+### 3.4 已知天体
+
+- MPCORB 二体传播只用于本地快速预筛，输出为 `local_prediction`；不能根据轨道历元距离宣称精确。
+- 有观测站坐标和网络时，整场查询自动调用 JPL Small-Body Identification API 的 second pass；成功结果标记为 `online_precise`，网络/API 失败则保留本地结果并记录 warning。
+- UTC → TAI → TT 用于动力学时间，站心旋转使用 UTC → UT1；没有 DUT1 时本地站心结果标记为 `degraded_time`。
+- Horizons 仅用于单目标诊断和 golden tests；MPChecker 用于测量后的身份交叉检查；OpenOrb sidecar 留给严格离线轨道拟合与不确定度传播。
+
 ## 4. 依赖策略
 
-| 能力            | 首选依赖                         | 当前状态                                                    |
-| --------------- | -------------------------------- | ----------------------------------------------------------- |
-| FITS            | `fitsio` + CFITSIO               | 可选 feature；本机需安装 CMake，默认暂用 `celestial-images` |
-| 源提取/孔径测光 | `sep-sys`                        | 已接入并有合成星场测试；静态 LGPLv3 影响发布许可证          |
-| 坐标/时间       | `erfars` + `time`                | 时间核心已建；ERFA 转换待接入                               |
-| 数组/并行       | `ndarray` + `rayon`              | 已加入依赖                                                  |
-| 三角网          | `delaunator`                     | 一级扩展 Delaunay 与对称三角不变量匹配已实现                |
-| 拟合            | `nalgebra`                       | 仿射初配与迭代稳健 TAN/CD 已实现                            |
-| 星表网络        | `reqwest` + VizieR TAP/ADQL/JSON | Gaia DR3 cone search 已接入；磁盘缓存待实现                 |
-| 天区索引        | `cdshealpix`                     | 离线星表阶段接入                                            |
-| 状态存储        | `rusqlite`                       | 工程持久化阶段接入                                          |
+| 能力            | 首选依赖                         | 当前状态                                              |
+| --------------- | -------------------------------- | ----------------------------------------------------- |
+| FITS            | `fitsio` + 内置 CFITSIO 源码     | 唯一默认读取后端；支持多 HDU、压缩、缩放和 BLANK      |
+| 源提取/孔径测光 | `sep-sys`                        | 已接入并有合成星场测试；静态 LGPLv3 影响发布许可证    |
+| 坐标/时间       | `erfars` + `time`                | UTC → TAI → TT 与 UTC → UT1 已接入；DUT1 缺失显式降级 |
+| 数组/并行       | `ndarray` + `rayon`              | 已加入依赖                                            |
+| 三角网          | `delaunator`                     | 一级扩展 Delaunay 与对称三角不变量匹配已实现          |
+| 拟合            | `nalgebra`                       | 仿射初配与迭代稳健 TAN/CD 已实现                      |
+| 星表网络        | `reqwest` + VizieR TAP/ADQL/JSON | Gaia DR3 cone search 已接入；磁盘缓存待实现           |
+| 天区索引        | `cdshealpix`                     | 离线星表阶段接入                                      |
+| 状态存储        | `rusqlite`                       | 工程持久化阶段接入                                    |
 
 详细取舍和验收门禁见 [07-technical-decisions.md](07-technical-decisions.md)。
 
@@ -95,6 +102,8 @@ Data Reduction 主路径是 near solve：
 
 - 元数据和小型结果使用 JSON command。
 - FITS 像素、tiles 和大型源目录使用 raw payload/Channel，不传 `number[]`。
+- 后端 Frame Registry 只常驻路径/元数据，科学像素使用按字节计费的 LRU；任务通过 `Arc` 临时 pin。
+- 前端只保留当前帧和下一帧的 `Float32Array`，每个缓存项自带宽高。WebGL2 `R32F` 纹理和 fragment shader 负责 Linear/Asinh、黑白点与反色，不保留 RGBA 全帧缓存。
 - 每个长任务有任务 ID、进度、取消令牌和结构化错误。
 - 同一 frame 的 background/source/WCS 结果按参数摘要缓存；切帧不能覆盖其他帧结果。
 - 文件访问由 Tauri scope 限制，sidecar 路径和参数不得直接接受任意 shell 字符串。

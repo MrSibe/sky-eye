@@ -1,5 +1,4 @@
 import { Channel, invoke } from '@tauri-apps/api/core'
-import type { FitsMeta } from '../types/fits'
 import type {
   DetectionResult,
   PlateSolveResult,
@@ -12,25 +11,9 @@ import type {
   BatchReductionResult,
 } from '../types/phase2'
 
-export interface RawPixels {
-  width: number
-  height: number
-  pixels: number[]
-  min: number
-  max: number
-}
-
 export interface LoadFramesResult {
   frames: FrameMeta[]
   total: number
-}
-
-export async function storeFits(path: string): Promise<FitsMeta> {
-  return invoke('store_fits', { path })
-}
-
-export async function getRawPixels(): Promise<RawPixels> {
-  return invoke('get_raw_pixels')
 }
 
 export async function loadFrames(paths: string[]): Promise<LoadFramesResult> {
@@ -44,10 +27,6 @@ export async function closeAllImages(): Promise<void> {
 export type FrontendLogLevel = 'debug' | 'info' | 'warn' | 'error'
 export function writeFrontendLog(level: FrontendLogLevel, message: string, context?: string): void {
   void invoke('write_frontend_log', { entry: { level, message, context } }).catch(() => {})
-}
-
-export async function getFramePixels(index: number): Promise<RawPixels> {
-  return invoke('get_frame_pixels', { index })
 }
 
 export async function getFramePixelBuffer(index: number): Promise<ArrayBuffer> {
@@ -142,13 +121,14 @@ export interface EphemerisPoint {
   rate_dec_arcsec_min: number
   angular_speed_arcsec_min: number
   predicted_mag: number | null
-  quality: 'current' | 'approximate'
-  epoch_offset_days: number
+  quality: 'online_precise' | 'local_prediction' | 'degraded_time'
+  epoch_offset_days: number | null
 }
 export interface Observatory {
   longitude_deg_east: number
   latitude_deg: number
   altitude_m: number
+  dut1_seconds?: number | null
 }
 export async function measureTarget(
   frameIndex: number,
@@ -360,6 +340,8 @@ export interface AppConfig {
     longitude_deg_east?: number
     latitude_deg?: number
     altitude_m?: number
+    dut1_seconds?: number
+    eop_updated_unix?: number
     telescope?: string
     aperture_m?: number
     focal_ratio?: number
@@ -393,9 +375,9 @@ export interface AppConfig {
     astrometry_catalog: 'Gaia3'
     detection_sigma: number
     minimum_fwhm_px: number
-    maximum_psf_fit_rms: number
+    maximum_centroid_fit_rms: number
     centroid_search_radius_px: number
-    centroid_method: 'psf' | 'aperture'
+    centroid_method: 'gaussian_window'
     plate_model: 'linear' | 'quadratic' | 'cubic'
     catalog_bright_limit_mag: number
     catalog_faint_limit_mag: number
@@ -441,6 +423,30 @@ export async function saveAppConfig(config: AppConfig): Promise<void> {
   return invoke('save_app_config', { config })
 }
 
+export async function loadAppConfigFile(path: string): Promise<AppConfig> {
+  return invoke('load_app_config_file', { path })
+}
+
+export async function saveAppConfigFile(path: string, config: AppConfig): Promise<void> {
+  return invoke('save_app_config_file', { path, config })
+}
+
+export interface StorageLayout {
+  root: string
+  config_dir: string
+  data_dir: string
+  mpcorb_dir: string
+  cache_dir: string
+  exports_dir: string
+  logs_dir: string
+  presets_dir: string
+  settings_file: string
+}
+
+export async function getStorageLayout(): Promise<StorageLayout> {
+  return invoke('get_storage_layout')
+}
+
 export interface SolveParams {
   center_ra_deg?: number
   center_dec_deg?: number
@@ -454,6 +460,7 @@ export interface SolveParams {
   catalog_faint_limit_mag?: number
   maximum_reference_stars?: number
   astrometric_residual_limit_arcsec?: number
+  accept_review?: boolean
 }
 
 export interface ManualCalibrationSeed {

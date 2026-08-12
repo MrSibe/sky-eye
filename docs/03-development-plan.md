@@ -37,7 +37,8 @@ pnpm install
 
 # 添加后端依赖
 cd src-tauri
-cargo add celestial-images ndarray imageproc tokio reqwest serde serde_json toml
+cargo add fitsio --features array,fitsio-src,src-cmake
+cargo add ndarray imageproc tokio reqwest serde serde_json toml
 cargo add tetra3 --git https://github.com/esa/tetra3
 cd ..
 ```

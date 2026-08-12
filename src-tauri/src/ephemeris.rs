@@ -1,6 +1,11 @@
-use crate::mpcorb::OrbitRecord;
+use crate::{
+    core::{AstroTime, TimeScale},
+    mpcorb::OrbitRecord,
+};
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
+
+pub mod jpl;
 
 const C_AU_PER_DAY: f64 = 173.144_632_684_669_3;
 const AU_METERS: f64 = 149_597_870_700.0;
@@ -10,6 +15,8 @@ pub struct Observatory {
     pub longitude_deg_east: f64,
     pub latitude_deg: f64,
     pub altitude_m: f64,
+    #[serde(default)]
+    pub dut1_seconds: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -20,18 +27,19 @@ pub struct EphemerisPoint {
     pub rate_ra_arcsec_min: f64,
     pub rate_dec_arcsec_min: f64,
     pub angular_speed_arcsec_min: f64,
-    pub heliocentric_distance_au: f64,
-    pub observer_distance_au: f64,
+    pub heliocentric_distance_au: Option<f64>,
+    pub observer_distance_au: Option<f64>,
     pub predicted_mag: Option<f64>,
     pub quality: PropagationQuality,
-    pub epoch_offset_days: f64,
+    pub epoch_offset_days: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PropagationQuality {
-    Current,
-    Approximate,
+    OnlinePrecise,
+    LocalPrediction,
+    DegradedTime,
 }
 
 pub fn propagate(
@@ -39,11 +47,13 @@ pub fn propagate(
     jd_utc: f64,
     station: Option<Observatory>,
 ) -> Result<EphemerisPoint, String> {
-    let jd_tt = jd_utc + 69.184 / 86400.0;
-    let (ra, dec, r, delta, mag) = position(record, jd_utc, jd_tt, station)?;
+    let (jd_tt, jd_ut1) = time_scales(jd_utc, station.and_then(|value| value.dut1_seconds))?;
+    let (ra, dec, r, delta, mag) = position(record, jd_ut1, jd_tt, station)?;
     let dt = 30.0 / 86400.0;
-    let (ra0, dec0, _, _, _) = position(record, jd_utc - dt, jd_tt - dt, station)?;
-    let (ra1, dec1, _, _, _) = position(record, jd_utc + dt, jd_tt + dt, station)?;
+    let (tt0, ut10) = time_scales(jd_utc - dt, station.and_then(|value| value.dut1_seconds))?;
+    let (tt1, ut11) = time_scales(jd_utc + dt, station.and_then(|value| value.dut1_seconds))?;
+    let (ra0, dec0, _, _, _) = position(record, ut10, tt0, station)?;
+    let (ra1, dec1, _, _, _) = position(record, ut11, tt1, station)?;
     let dra = wrap_deg(ra1 - ra0) * dec.to_radians().cos() * 3600.0;
     let ddec = (dec1 - dec0) * 3600.0;
     let rate_ra = dra;
@@ -56,21 +66,33 @@ pub fn propagate(
         rate_ra_arcsec_min: rate_ra,
         rate_dec_arcsec_min: rate_dec,
         angular_speed_arcsec_min: rate_ra.hypot(rate_dec),
-        heliocentric_distance_au: r,
-        observer_distance_au: delta,
+        heliocentric_distance_au: Some(r),
+        observer_distance_au: Some(delta),
         predicted_mag: mag,
-        quality: if offset.abs() <= 30.0 {
-            PropagationQuality::Current
+        quality: if station.is_some_and(|value| value.dut1_seconds.is_none()) {
+            PropagationQuality::DegradedTime
         } else {
-            PropagationQuality::Approximate
+            PropagationQuality::LocalPrediction
         },
-        epoch_offset_days: offset,
+        epoch_offset_days: Some(offset),
     })
+}
+
+fn time_scales(jd_utc: f64, dut1_seconds: Option<f64>) -> Result<(f64, f64), String> {
+    let jd1 = jd_utc.floor();
+    let utc = AstroTime {
+        jd1,
+        jd2: jd_utc - jd1,
+        scale: TimeScale::Utc,
+    };
+    let tt = utc.to_tt()?.julian_date();
+    let ut1 = utc.to_ut1(dut1_seconds.unwrap_or(0.0))?.julian_date();
+    Ok((tt, ut1))
 }
 
 fn position(
     record: &OrbitRecord,
-    jd_utc: f64,
+    jd_ut1: f64,
     jd_tt: f64,
     station: Option<Observatory>,
 ) -> Result<(f64, f64, f64, f64, Option<f64>), String> {
@@ -87,7 +109,7 @@ fn position(
             helio[2] - earth[2],
         ];
         if let Some(s) = station {
-            let o = observer_equatorial(jd_utc, s);
+            let o = observer_equatorial(jd_ut1, s);
             for k in 0..3 {
                 geo[k] -= o[k];
             }

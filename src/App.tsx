@@ -7,7 +7,6 @@ import { SciencePanel } from './components/SciencePanel'
 import { SettingsDialog } from './components/SettingsDialog'
 import { ReportExportDialog } from './components/ReportExportDialog'
 import { SuspiciousTargetDialog } from './components/SuspiciousTargetDialog'
-import { ReductionSettings } from './components/ReductionSettings'
 import {
   countApproximateMatches,
   ManualCalibrationPanel,
@@ -52,7 +51,6 @@ import type {
   SolveParams,
   TargetMeasurement,
 } from './lib/tauri'
-import { asinhStretch, invertImageData, linearStretch, zscale } from './lib/stretch'
 import {
   Crosshair,
   Eye,
@@ -72,17 +70,19 @@ function reportIdentity(designation: string): ObjectIdentity {
   return { kind: 'tracklet', value: designation }
 }
 
+const APP_STARTED_UNIX_SECONDS = Date.now() / 1000
+
 function App() {
   const {
     error,
     isLoading,
     setMeta,
     setRawPixels,
-    setImageData,
     setLoading,
     setError,
     setFilePath,
     requestFit,
+    setStretchLimits,
   } = useFitsStore()
   const {
     detectedStars,
@@ -90,13 +90,12 @@ function App() {
     isSolving,
     frames,
     framePixels,
-    frameWidth,
-    frameHeight,
     currentFrameIndex,
     frameAnalyses,
     setFrames,
     setBlinkState,
-    setFramePixels,
+    cacheFramePixels,
+    pruneFramePixels,
     setDetection,
     setSolution,
     setFrameReduction,
@@ -105,11 +104,9 @@ function App() {
     resetSession,
   } = useSessionStore()
 
-  const stretchCache = useRef<Map<number, ImageData>>(new Map())
-  const stretchLimits = useRef<{ z1: number; z2: number } | null>(null)
+  const pixelLoadGeneration = useRef(0)
   const [loadingProgress, setLoadingProgress] = useState<string | null>(null)
   const [reductionMessage, setReductionMessage] = useState<string | null>(null)
-  const [showReductionSettings, setShowReductionSettings] = useState(false)
   const [reductionProgress, setReductionProgress] = useState<string | null>(null)
   const [stretchMode, setStretchMode] = useState<'linear' | 'asinh'>('linear')
   const [inverted, setInverted] = useState(true)
@@ -147,6 +144,9 @@ function App() {
     ),
   )
   const currentKnownObjects = knownObjectsByFrame[currentFrameIndex] ?? []
+  const currentPixelFrame = framePixels[currentFrameIndex]
+  const frameWidth = currentPixelFrame?.width ?? frames[currentFrameIndex]?.width ?? 0
+  const frameHeight = currentPixelFrame?.height ?? frames[currentFrameIndex]?.height ?? 0
   const knownObjectCount = Object.values(knownObjectsByFrame).reduce(
     (total, objects) => total + objects.length,
     0,
@@ -270,40 +270,48 @@ function App() {
     [manualCalibration, detectedStars, frameWidth, frameHeight],
   )
 
-  const renderFrame = useCallback(
-    (index: number) => {
-      const pixels = framePixels[index]
-      if (!pixels || frameWidth === 0) return
-
-      const cached = stretchCache.current.get(index)
-      if (cached) {
-        setImageData(cached)
-        return
+  const ensureFramePixels = useCallback(
+    async (index: number, generation = pixelLoadGeneration.current) => {
+      const frame = useSessionStore.getState().frames[index]
+      if (!frame) return
+      let cached = useSessionStore.getState().framePixels[index]
+      if (!cached) {
+        const buffer = await getFramePixelBuffer(index)
+        if (generation !== pixelLoadGeneration.current) return
+        const pixels = new Float32Array(buffer)
+        cacheFramePixels(index, pixels, frame.width, frame.height)
+        cached = { pixels, width: frame.width, height: frame.height }
       }
-
-      const limits = stretchLimits.current ?? zscale(pixels, frameWidth, frameHeight)
-      stretchLimits.current = limits
-      const stretched =
-        stretchMode === 'asinh'
-          ? asinhStretch(pixels, limits.z1, limits.z2, frameWidth, frameHeight)
-          : linearStretch(pixels, limits.z1, limits.z2, frameWidth, frameHeight)
-      const imgData = inverted ? invertImageData(stretched) : stretched
-      stretchCache.current.set(index, imgData)
-      setImageData(imgData)
+      if (useSessionStore.getState().currentFrameIndex === index) {
+        setRawPixels(cached.pixels, cached.width, cached.height)
+      }
+      const total = useSessionStore.getState().frames.length
+      if (total > 1) {
+        const next = (index + 1) % total
+        if (!useSessionStore.getState().framePixels[next]) {
+          const nextFrame = useSessionStore.getState().frames[next]
+          const buffer = await getFramePixelBuffer(next)
+          if (generation !== pixelLoadGeneration.current) return
+          cacheFramePixels(next, new Float32Array(buffer), nextFrame.width, nextFrame.height)
+        }
+      }
+      if (useSessionStore.getState().currentFrameIndex === index) {
+        pruneFramePixels(index, total)
+      }
     },
-    [framePixels, frameWidth, frameHeight, inverted, setImageData, stretchMode],
+    [cacheFramePixels, pruneFramePixels, setRawPixels],
   )
 
   useEffect(() => {
-    if (framePixels.length === 0) return
-    renderFrame(currentFrameIndex)
-  }, [currentFrameIndex, framePixels, renderFrame])
+    if (!frames[currentFrameIndex]) return
+    void ensureFramePixels(currentFrameIndex).catch((error) => setError(String(error)))
+  }, [currentFrameIndex, ensureFramePixels, frames, setError])
 
   const handleOpen = useCallback(async () => {
     try {
       const selected = await open({
         multiple: true,
-        filters: [{ name: 'FITS', extensions: ['fits', 'fit', 'fts'] }],
+        filters: [{ name: 'FITS', extensions: ['fits', 'fit', 'fts', 'fz'] }],
       })
       if (!selected || selected.length === 0) return
       const paths = Array.isArray(selected) ? selected : [selected]
@@ -311,15 +319,14 @@ function App() {
       setError(null)
       setLoadingProgress(null)
       setReductionMessage(null)
-      setShowReductionSettings(false)
       setManualCalibration(null)
       setManualQueue([])
       setMeasurements([])
       setKnownObjectsByFrame({})
       setKnownVisible(false)
       manualFrameIndex.current = null
-      stretchCache.current.clear()
-      stretchLimits.current = null
+      pixelLoadGeneration.current += 1
+      setStretchLimits(null)
 
       const result = await loadFrames(paths)
       const first = result.frames[0]
@@ -329,30 +336,13 @@ function App() {
         return
       }
 
-      // Load ALL frames' pixels upfront with progress
-      const allPixels: Float32Array[] = new Array(result.total)
-      let firstWidth = 0
-      let firstHeight = 0
-
-      for (let i = 0; i < result.total; i++) {
-        setLoadingProgress(`加载帧 ${i + 1}/${result.total}`)
-        const frame = result.frames[i]
-        const buffer = await getFramePixelBuffer(i)
-        allPixels[i] = new Float32Array(buffer)
-        if (i === 0) {
-          firstWidth = frame.width
-          firstHeight = frame.height
-        }
-        writeFrontendLog(
-          'debug',
-          `Frame ${i + 1}/${result.total}: w=${frame.width} h=${frame.height} pixels=${allPixels[i].length} min=${frame.min_val} max=${frame.max_val}`,
-          'fits',
-        )
-      }
-
-      // All loaded — update state
-      setLoadingProgress(null)
+      setLoadingProgress('加载当前帧')
       setFrames(result.frames)
+      for (const frame of result.frames) {
+        for (const diagnostic of frame.diagnostics) {
+          writeFrontendLog('warn', `${frame.label}: ${diagnostic}`, 'fits-header')
+        }
+      }
       setFilePath(first.path)
       setMeta({
         path: first.path,
@@ -373,20 +363,14 @@ function App() {
         parity_flipped: first.parity_flipped,
       })
 
-      setRawPixels(allPixels[0], firstWidth, firstHeight)
-      setFramePixels(allPixels, firstWidth, firstHeight)
-
-      const { z1, z2 } = zscale(allPixels[0], firstWidth, firstHeight)
-      stretchLimits.current = { z1, z2 }
-      writeFrontendLog('debug', `zscale: z1=${z1} z2=${z2} range=${z2 - z1}`, 'display')
-      const stretched =
-        stretchMode === 'asinh'
-          ? asinhStretch(allPixels[0], z1, z2, firstWidth, firstHeight)
-          : linearStretch(allPixels[0], z1, z2, firstWidth, firstHeight)
-      const imgData = inverted ? invertImageData(stretched) : stretched
-      writeFrontendLog('debug', `ImageData: w=${imgData.width} h=${imgData.height}`, 'display')
-      stretchCache.current.set(0, imgData)
-      setImageData(imgData)
+      const firstPixels = new Float32Array(await getFramePixelBuffer(0))
+      cacheFramePixels(0, firstPixels, first.width, first.height)
+      setRawPixels(firstPixels, first.width, first.height)
+      writeFrontendLog(
+        'debug',
+        `Frame 1/${result.total}: w=${first.width} h=${first.height} pixels=${firstPixels.length} min=${first.min_val} max=${first.max_val}`,
+        'fits',
+      )
       requestFit()
 
       // Set up Blink session if needed
@@ -403,16 +387,14 @@ function App() {
   }, [
     setMeta,
     setRawPixels,
-    setImageData,
     setLoading,
     setError,
     setFilePath,
     setFrames,
     setBlinkState,
-    setFramePixels,
+    cacheFramePixels,
     requestFit,
-    stretchMode,
-    inverted,
+    setStretchLimits,
   ])
 
   const handleCloseAllImages = useCallback(async () => {
@@ -421,7 +403,6 @@ function App() {
       resetSession()
       setMeta(null)
       setRawPixels(null, 0, 0)
-      setImageData(null)
       setFilePath(null)
       setLoading(false)
       setError(null)
@@ -433,19 +414,18 @@ function App() {
       setScienceOpen(false)
       setReportOpen(false)
       setReportPreview('')
-      setShowReductionSettings(false)
       setManualCalibration(null)
       setManualQueue([])
       manualFrameIndex.current = null
-      stretchCache.current.clear()
-      stretchLimits.current = null
+      pixelLoadGeneration.current += 1
+      setStretchLimits(null)
       setLoadingProgress(null)
       setReductionProgress(null)
       setReductionMessage(null)
     } catch (e) {
       setError(String(e))
     }
-  }, [resetSession, setError, setFilePath, setImageData, setLoading, setMeta, setRawPixels])
+  }, [resetSession, setError, setFilePath, setLoading, setMeta, setRawPixels, setStretchLimits])
 
   const handleMeasure = useCallback(
     async (x: number, y: number) => {
@@ -498,11 +478,15 @@ function App() {
   }, [])
   const observatory = useMemo(() => {
     const s = appConfig?.station
+    const eopFresh =
+      s?.eop_updated_unix != null &&
+      Math.abs(APP_STARTED_UNIX_SECONDS - s.eop_updated_unix) <= 7 * 24 * 60 * 60
     return s?.longitude_deg_east != null && s.latitude_deg != null
       ? {
           longitude_deg_east: s.longitude_deg_east,
           latitude_deg: s.latitude_deg,
           altitude_m: s.altitude_m ?? 0,
+          dut1_seconds: eopFresh ? (s.dut1_seconds ?? null) : null,
         }
       : undefined
   }, [appConfig])
@@ -689,6 +673,10 @@ function App() {
       setDetection(analysis.detection)
       setManualCalibration({
         sources: analysis.catalog.sources,
+        imageCandidateLimit: Math.min(
+          100,
+          Math.max(50, solveParams.maximum_reference_stars ?? 100),
+        ),
         seed: {
           center_ra_deg: solvedWcs?.crval1 ?? analysis.catalog.query.ra_deg,
           center_dec_deg: solvedWcs?.crval2 ?? analysis.catalog.query.dec_deg,
@@ -705,7 +693,6 @@ function App() {
           ),
         },
       })
-      setShowReductionSettings(false)
       setReductionMessage(null)
       return true
     },
@@ -778,7 +765,6 @@ function App() {
               batch.frames.length > 1 ? `整组 ${batch.frames.length} 帧归算完成` : '本帧归算完成'
             setReductionMessage(`${scope}；REFCAT2 光度定标全部完成。`)
           }
-          setShowReductionSettings(false)
         } else if (missingHintFrames.length > 0) {
           const firstMissing = missingHintFrames[0]
           const blinkState = await blinkSetFrame(firstMissing.frame_index)
@@ -792,7 +778,6 @@ function App() {
               ? `${astrometryError}\n${photometryFailureMessage}`
               : astrometryError,
           )
-          setShowReductionSettings(true)
         } else {
           const [firstPending, ...remainingFrames] = pendingFrames
           setManualQueue(remainingFrames.map((frame) => frame.frame_index))
@@ -802,14 +787,12 @@ function App() {
           )
           if (manualOpened) {
             setError(photometryFailureMessage)
-            setShowReductionSettings(false)
           } else {
             setError(
               photometryFailureMessage
                 ? `${firstPending.solution.message}\n${photometryFailureMessage}`
                 : firstPending.solution.message,
             )
-            setShowReductionSettings(true)
           }
         }
       } catch (err) {
@@ -853,6 +836,8 @@ function App() {
         offset_y_px: seed.offset_y_px,
         catalog_bright_limit_mag: seed.catalog_bright_limit_mag,
         catalog_faint_limit_mag: seed.catalog_faint_limit_mag,
+        maximum_reference_stars: manualCalibration.imageCandidateLimit,
+        accept_review: true,
       })
       setSolution(solution)
       if (!solution.success) {
@@ -924,7 +909,6 @@ function App() {
           if (!manualOpened) {
             const nextFrameError = '下一帧无法直接进入人工对齐，请补充归算初值。'
             setError(photometryError ? `${nextFrameError}\n${photometryError}` : nextFrameError)
-            setShowReductionSettings(true)
           } else if (photometryError) {
             setError(photometryError)
           }
@@ -1060,15 +1044,6 @@ function App() {
         </Button>
       </Toolbar>
 
-      {showReductionSettings && frames[currentFrameIndex] && (
-        <ReductionSettings
-          frame={frames[currentFrameIndex]}
-          busy={isDetecting || isSolving}
-          onClose={() => setShowReductionSettings(false)}
-          onSubmit={handleReduction}
-        />
-      )}
-
       {error && (
         <MessageDialog
           tone="error"
@@ -1090,6 +1065,8 @@ function App() {
       <div className="flex-1 flex min-h-0">
         <div className="flex-1 relative">
           <FITSViewer
+            stretchMode={stretchMode}
+            inverted={inverted}
             manualCalibration={manualCalibration}
             onManualOffsetChange={(x, y) => {
               if (!manualCalibration) return
@@ -1120,12 +1097,10 @@ function App() {
           <DisplaySidebar
             stretchMode={stretchMode}
             onStretchModeChange={(mode) => {
-              stretchCache.current.clear()
               setStretchMode(mode)
             }}
             inverted={inverted}
             onInvertedChange={(nextInverted) => {
-              stretchCache.current.clear()
               setInverted(nextInverted)
             }}
             onFitView={requestFit}
@@ -1162,7 +1137,7 @@ function App() {
       {pendingMeasurement && (
         <SuspiciousTargetDialog
           measurement={pendingMeasurement}
-          pixels={framePixels[pendingMeasurement.frame_index]}
+          pixels={framePixels[pendingMeasurement.frame_index]?.pixels}
           width={frames[pendingMeasurement.frame_index]?.width ?? frameWidth}
           height={frames[pendingMeasurement.frame_index]?.height ?? frameHeight}
           busy={scienceBusy}

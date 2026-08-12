@@ -18,6 +18,7 @@ import { Field, Input } from './ui/form'
 export interface ManualCalibrationState {
   sources: GaiaSource[]
   seed: ManualCalibrationSeed
+  imageCandidateLimit: number
 }
 
 interface OverlayProps {
@@ -97,21 +98,21 @@ export function countApproximateMatches(
   height: number,
 ): number {
   const wcs = seedWcs(calibration.seed, width, height)
+  const catalogSources = matchingCatalogSources(calibration)
+  const imageSources = matchingImageSources(stars, calibration.imageCandidateLimit)
+  const tolerancePx = Math.min(
+    4 / calibration.seed.pixel_scale_arcsec,
+    Math.max(0.8 / calibration.seed.pixel_scale_arcsec, 4),
+  )
   const used = new Set<number>()
   let count = 0
-  for (const source of calibration.sources) {
-    if (
-      source.g_mag == null ||
-      source.g_mag < calibration.seed.catalog_bright_limit_mag ||
-      source.g_mag > calibration.seed.catalog_faint_limit_mag
-    )
-      continue
+  for (const source of catalogSources) {
     const [x, y] = skyToPixel(wcs, source.ra_deg, source.dec_deg)
     if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= width || y >= height)
       continue
     let bestIndex = -1
-    let bestDistance = 12
-    stars.forEach((star, index) => {
+    let bestDistance = tolerancePx
+    imageSources.forEach((star, index) => {
       if (used.has(index)) return
       const distance = Math.hypot(star.x - x, star.y - y)
       if (distance < bestDistance) {
@@ -125,6 +126,40 @@ export function countApproximateMatches(
     }
   }
   return count
+}
+
+function matchingCatalogSources(calibration: ManualCalibrationState): GaiaSource[] {
+  return calibration.sources
+    .filter(
+      (source) =>
+        source.g_mag != null &&
+        source.g_mag >= calibration.seed.catalog_bright_limit_mag &&
+        source.g_mag <= calibration.seed.catalog_faint_limit_mag &&
+        !source.duplicated_source &&
+        (source.ruwe == null || source.ruwe <= 1.4) &&
+        (source.astrometric_params_solved == null ||
+          source.astrometric_params_solved === 31 ||
+          source.astrometric_params_solved === 95),
+    )
+    .sort((left, right) => (left.g_mag ?? Infinity) - (right.g_mag ?? Infinity))
+    .slice(0, 256)
+}
+
+function matchingImageSources(stars: DetectedStar[], limit: number): DetectedStar[] {
+  return stars
+    .filter(
+      (star) =>
+        Number.isFinite(star.x) &&
+        Number.isFinite(star.y) &&
+        Number.isFinite(star.flux) &&
+        star.flux > 0 &&
+        star.fwhm > 0.4 &&
+        star.fwhm < 30 &&
+        star.ellipticity < 0.65 &&
+        !star.saturated,
+    )
+    .sort((left, right) => right.flux - left.flux)
+    .slice(0, limit)
 }
 
 export function GaiaCalibrationOverlay({
@@ -150,12 +185,7 @@ export function GaiaCalibrationOverlay({
     canvas.height = height
     context.clearRect(0, 0, width, height)
     const wcs = seedWcs(calibration.seed, width, height)
-    const visibleSources = calibration.sources.filter(
-      (source) =>
-        source.g_mag != null &&
-        source.g_mag >= calibration.seed.catalog_bright_limit_mag &&
-        source.g_mag <= calibration.seed.catalog_faint_limit_mag,
-    )
+    const visibleSources = matchingCatalogSources(calibration)
     for (const source of visibleSources) {
       const [x, y] = skyToPixel(wcs, source.ra_deg, source.dec_deg)
       if (
@@ -167,38 +197,27 @@ export function GaiaCalibrationOverlay({
         y > height + 12
       )
         continue
-      const magnitude = source.g_mag ?? 17
-      const radius = Math.max(7, Math.min(11, 11 - (magnitude - 10) * 0.35)) / zoom
-      const tick = 3.5 / zoom
-      // A dark halo preserves contrast over saturated stars and bright sky;
-      // the inner vermilion ring remains visible over the black background.
-      context.strokeStyle = 'rgba(10, 12, 15, .92)'
-      context.lineWidth = 5 / zoom
-      context.beginPath()
-      context.arc(x, y, radius, 0, Math.PI * 2)
-      context.stroke()
+      // Gaia sources are unresolved point sources: the catalog has magnitudes,
+      // not apparent disc radii. Like a star-chart overlay, encode catalog
+      // brightness as ring size so the pattern is easier to recognize.
+      const magnitudeSpan = Math.max(
+        0.1,
+        calibration.seed.catalog_faint_limit_mag - calibration.seed.catalog_bright_limit_mag,
+      )
+      const brightness = Math.max(
+        0,
+        Math.min(
+          1,
+          (calibration.seed.catalog_faint_limit_mag - (source.g_mag ?? 99)) / magnitudeSpan,
+        ),
+      )
+      const radius = Math.max(3.5 + 6.5 * Math.sqrt(brightness), 4 / zoom)
       context.strokeStyle = '#ff4f49'
-      context.lineWidth = 2.25 / zoom
+      context.lineWidth = 1.5 / zoom
       context.beginPath()
       context.arc(x, y, radius, 0, Math.PI * 2)
-      context.moveTo(x - radius - tick, y)
-      context.lineTo(x - radius + tick * 0.25, y)
-      context.moveTo(x + radius - tick * 0.25, y)
-      context.lineTo(x + radius + tick, y)
-      context.moveTo(x, y - radius - tick)
-      context.lineTo(x, y - radius + tick * 0.25)
-      context.moveTo(x, y + radius - tick * 0.25)
-      context.lineTo(x, y + radius + tick)
       context.stroke()
     }
-    context.strokeStyle = '#ff4f49'
-    context.lineWidth = 2 / zoom
-    context.beginPath()
-    context.moveTo(wcs.crpix1 - 12 / zoom, wcs.crpix2)
-    context.lineTo(wcs.crpix1 + 12 / zoom, wcs.crpix2)
-    context.moveTo(wcs.crpix1, wcs.crpix2 - 12 / zoom)
-    context.lineTo(wcs.crpix1, wcs.crpix2 + 12 / zoom)
-    context.stroke()
   }, [calibration, height, width, zoom])
 
   return (
@@ -247,12 +266,7 @@ export function ManualCalibrationPanel({
   const seed = calibration.seed
   const [nudgeStep, setNudgeStep] = useState(1)
   const update = (patch: Partial<ManualCalibrationSeed>) => onChange({ ...seed, ...patch })
-  const visibleSourceCount = calibration.sources.filter(
-    (source) =>
-      source.g_mag != null &&
-      source.g_mag >= seed.catalog_bright_limit_mag &&
-      source.g_mag <= seed.catalog_faint_limit_mag,
-  ).length
+  const visibleSourceCount = matchingCatalogSources(calibration).length
   return (
     <section className="absolute bottom-12 left-1/2 z-50 w-[920px] max-w-[calc(100vw-24px)] -translate-x-1/2 overflow-hidden rounded-md border border-[#ff5b58]/55 bg-sky-overlay/95 shadow-2xl backdrop-blur-md">
       <header className="flex items-center justify-between border-b border-sky-hairline bg-[#ff5b58]/[0.07] px-4 py-2.5">
@@ -271,8 +285,8 @@ export function ManualCalibrationPanel({
         <Field label="比例 · arcsec/px">
           <Input
             type="number"
-            step="0.0001"
-            value={seed.pixel_scale_arcsec}
+            step="0.01"
+            value={seed.pixel_scale_arcsec.toFixed(2)}
             onChange={(event) => update({ pixel_scale_arcsec: Number(event.target.value) })}
             className="font-mono"
           />
@@ -427,7 +441,7 @@ export function ManualCalibrationPanel({
       </div>
       <footer className="flex items-center justify-between border-t border-sky-hairline bg-sky-canvas-soft px-4 py-2.5">
         <p className="text-[10px] text-sky-body">
-          拖动或微调红圈覆盖绿色星点。G 星等区间同时用于显示和最终参考星关联。
+          红圈大小表示 Gaia G 星等的相对亮度，并非恒星真实半径；拖动或微调红圈覆盖绿色星点。
         </p>
         <Button
           variant="primary"
@@ -439,7 +453,7 @@ export function ManualCalibrationPanel({
             seed.catalog_bright_limit_mag > seed.catalog_faint_limit_mag
           }
         >
-          {busy ? '归算中…' : '使用当前初值继续归算'}
+          {busy ? '归算中…' : '确认参考星匹配并归算'}
         </Button>
       </footer>
     </section>

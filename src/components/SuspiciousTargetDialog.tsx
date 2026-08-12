@@ -73,9 +73,12 @@ function TargetCutout({
         className="h-full w-full [image-rendering:pixelated]"
         aria-label="可疑目标局部放大图"
       />
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-rose-400 shadow-[0_0_0_1px_rgba(0,0,0,.35)]" />
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-px w-4 -translate-x-1/2 -translate-y-1/2 bg-rose-400" />
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-rose-400" />
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full border border-rose-400 shadow-[0_0_0_1px_rgba(0,0,0,.35)]"
+        style={{
+          width: `${Math.min(50, Math.max(6, (measurement.aperture_radius_px / 32) * 100))}%`,
+        }}
+      />
       <span className="absolute bottom-2 left-2 rounded bg-black/65 px-1.5 py-1 font-mono text-[9px] text-white/75">
         64 × 64 px
       </span>

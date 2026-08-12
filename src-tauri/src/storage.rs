@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
-use tauri::Manager;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct StorageLayout {
@@ -11,6 +13,7 @@ pub struct StorageLayout {
     pub cache_dir: PathBuf,
     pub exports_dir: PathBuf,
     pub logs_dir: PathBuf,
+    pub presets_dir: PathBuf,
     pub settings_file: PathBuf,
 }
 
@@ -22,6 +25,8 @@ pub struct StationConfig {
     pub longitude_deg_east: Option<f64>,
     pub latitude_deg: Option<f64>,
     pub altitude_m: Option<f64>,
+    pub dut1_seconds: Option<f64>,
+    pub eop_updated_unix: Option<i64>,
     pub telescope: Option<String>,
     pub aperture_m: Option<f64>,
     pub focal_ratio: Option<f64>,
@@ -94,7 +99,8 @@ pub struct ReductionConfig {
     pub astrometry_catalog: String,
     pub detection_sigma: f64,
     pub minimum_fwhm_px: f64,
-    pub maximum_psf_fit_rms: f64,
+    #[serde(alias = "maximum_psf_fit_rms")]
+    pub maximum_centroid_fit_rms: f64,
     pub centroid_search_radius_px: f64,
     pub centroid_method: String,
     pub plate_model: String,
@@ -112,9 +118,9 @@ impl Default for ReductionConfig {
             astrometry_catalog: "Gaia3".into(),
             detection_sigma: 4.0,
             minimum_fwhm_px: 0.70,
-            maximum_psf_fit_rms: 0.20,
+            maximum_centroid_fit_rms: 0.20,
             centroid_search_radius_px: 0.75,
-            centroid_method: "psf".into(),
+            centroid_method: "gaussian_window".into(),
             plate_model: "linear".into(),
             catalog_bright_limit_mag: 10.0,
             catalog_faint_limit_mag: 18.0,
@@ -285,6 +291,8 @@ impl Default for AppConfig {
                 longitude_deg_east: Some(-14.0),
                 latitude_deg: Some(48.0),
                 altitude_m: Some(800.0),
+                dut1_seconds: None,
+                eop_updated_unix: None,
                 telescope: None,
                 aperture_m: None,
                 focal_ratio: None,
@@ -303,8 +311,27 @@ impl Default for AppConfig {
     }
 }
 
-pub fn layout(app: &tauri::AppHandle) -> Result<StorageLayout, String> {
-    let root = app.path().app_data_dir().map_err(|e| e.to_string())?;
+fn installation_root() -> Result<PathBuf, String> {
+    #[cfg(debug_assertions)]
+    {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(PathBuf::from)
+            .ok_or_else(|| "cannot resolve the Sky Eye project root".to_string())
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        std::env::current_exe()
+            .map_err(|error| format!("cannot locate the Sky Eye executable: {error}"))?
+            .parent()
+            .map(PathBuf::from)
+            .ok_or_else(|| "cannot resolve the Sky Eye installation directory".to_string())
+    }
+}
+
+pub fn layout(_app: &tauri::AppHandle) -> Result<StorageLayout, String> {
+    let root = installation_root()?;
     let config_dir = root.join("config");
     let data_dir = root.join("data");
     Ok(StorageLayout {
@@ -313,6 +340,7 @@ pub fn layout(app: &tauri::AppHandle) -> Result<StorageLayout, String> {
         cache_dir: root.join("cache"),
         exports_dir: root.join("exports"),
         logs_dir: root.join("logs"),
+        presets_dir: root.join("presets"),
         root,
         config_dir,
         data_dir,
@@ -329,8 +357,26 @@ pub fn initialize(app: &tauri::AppHandle) -> Result<StorageLayout, String> {
         &paths.cache_dir,
         &paths.exports_dir,
         &paths.logs_dir,
+        &paths.presets_dir,
     ] {
         fs::create_dir_all(directory).map_err(|e| e.to_string())?;
+    }
+    for (name, content) in [
+        (
+            "PS1.json",
+            include_bytes!("../../presets/PS1.json").as_slice(),
+        ),
+        (
+            "PS2.json",
+            include_bytes!("../../presets/PS2.json").as_slice(),
+        ),
+    ] {
+        let destination = paths.presets_dir.join(name);
+        if !destination.exists() {
+            fs::write(&destination, content).map_err(|error| {
+                format!("cannot install preset {}: {error}", destination.display())
+            })?;
+        }
     }
     if !paths.settings_file.exists() {
         save_config(app, &AppConfig::default())?;
@@ -340,36 +386,66 @@ pub fn initialize(app: &tauri::AppHandle) -> Result<StorageLayout, String> {
 
 pub fn load_config(app: &tauri::AppHandle) -> Result<AppConfig, String> {
     let paths = initialize(app)?;
-    let bytes = fs::read(&paths.settings_file).map_err(|e| e.to_string())?;
-    let config: AppConfig =
-        serde_json::from_slice(&bytes).map_err(|e| format!("invalid config/settings.json: {e}"))?;
+    load_config_file(&paths.settings_file)
+}
+
+pub fn load_config_file(path: &Path) -> Result<AppConfig, String> {
+    let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let mut config: AppConfig =
+        serde_json::from_slice(&bytes).map_err(|e| format!("invalid settings JSON: {e}"))?;
     // Pre-release development schemas are reset in memory, not migrated or
     // rewritten. The v1 file is written only after an explicit user save.
     if config.schema_version != 1 {
         return Ok(AppConfig::default());
+    }
+    // Pre-release builds exposed centroid modes that were never implemented.
+    // Preserve existing settings files while aligning the saved provenance
+    // with the Gaussian-window algorithm that is actually executed.
+    if matches!(
+        config.reduction.centroid_method.as_str(),
+        "psf" | "aperture"
+    ) {
+        config.reduction.centroid_method = "gaussian_window".into();
     }
     validate(&config)?;
     Ok(config)
 }
 
 pub fn save_config(app: &tauri::AppHandle, value: &AppConfig) -> Result<(), String> {
-    validate(value)?;
     let paths = layout(app)?;
-    fs::create_dir_all(&paths.config_dir).map_err(|e| e.to_string())?;
-    let temporary = paths.config_dir.join(".settings.json.tmp");
+    save_config_file(&paths.settings_file, value)
+}
+
+pub fn save_config_file(path: &Path, value: &AppConfig) -> Result<(), String> {
+    validate(value)?;
+    let parent = path
+        .parent()
+        .ok_or("settings file has no parent directory")?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let temporary = parent.join(format!(
+        ".{}.tmp",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("settings.json")
+    ));
     fs::write(
         &temporary,
         serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
-    let backup = paths.config_dir.join("settings.json.previous");
-    if paths.settings_file.exists() {
+    let backup = parent.join(format!(
+        "{}.previous",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("settings.json")
+    ));
+    if path.exists() {
         let _ = fs::remove_file(&backup);
-        fs::rename(&paths.settings_file, &backup).map_err(|e| e.to_string())?;
+        fs::rename(path, &backup).map_err(|e| e.to_string())?;
     }
-    if let Err(error) = fs::rename(&temporary, &paths.settings_file) {
+    if let Err(error) = fs::rename(&temporary, path) {
         if backup.exists() {
-            let _ = fs::rename(&backup, &paths.settings_file);
+            let _ = fs::rename(&backup, path);
         }
         return Err(error.to_string());
     }
@@ -397,6 +473,13 @@ fn validate(value: &AppConfig) -> Result<(), String> {
     {
         return Err("station coordinates are out of range".into());
     }
+    if value
+        .station
+        .dut1_seconds
+        .is_some_and(|value| !(-1.0..=1.0).contains(&value))
+    {
+        return Err("DUT1 must be in [-1, 1] seconds".into());
+    }
     if !matches!(
         value.time.date_obs_reference.as_str(),
         "start" | "midpoint" | "end"
@@ -408,6 +491,7 @@ fn validate(value: &AppConfig) -> Result<(), String> {
     }
     if !(1.0..=20.0).contains(&value.reduction.detection_sigma)
         || value.reduction.catalog_bright_limit_mag > value.reduction.catalog_faint_limit_mag
+        || value.reduction.centroid_method != "gaussian_window"
         || !matches!(
             value.reduction.plate_model.as_str(),
             "linear" | "quadratic" | "cubic"
@@ -446,6 +530,30 @@ mod tests {
     }
 
     #[test]
+    fn bundled_panstarrs_json_presets_are_valid() {
+        let ps1: AppConfig = serde_json::from_str(include_str!("../../presets/PS1.json")).unwrap();
+        let ps2: AppConfig = serde_json::from_str(include_str!("../../presets/PS2.json")).unwrap();
+
+        validate(&ps1).unwrap();
+        validate(&ps2).unwrap();
+        assert_eq!(ps1.station.mpc_code, "F51");
+        assert_eq!(ps2.station.mpc_code, "F52");
+        assert_eq!(ps1.station.longitude_deg_east, Some(150.417));
+        assert_eq!(ps2.station.longitude_deg_east, Some(150.417));
+        assert_eq!(ps1.instrument.position_angle_deg, Some(323.0));
+        assert_eq!(ps2.instrument.position_angle_deg, Some(273.8));
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn debug_storage_root_is_the_project_root() {
+        assert_eq!(
+            installation_root().unwrap(),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap()
+        );
+    }
+
+    #[test]
     fn defaults_follow_astrometrica_reference_profile() {
         let config = AppConfig::default();
 
@@ -469,8 +577,9 @@ mod tests {
         assert!(config.time.check_after_loading);
         assert_eq!(config.reduction.detection_sigma, 4.0);
         assert_eq!(config.reduction.minimum_fwhm_px, 0.70);
-        assert_eq!(config.reduction.maximum_psf_fit_rms, 0.20);
+        assert_eq!(config.reduction.maximum_centroid_fit_rms, 0.20);
         assert_eq!(config.reduction.centroid_search_radius_px, 0.75);
+        assert_eq!(config.reduction.centroid_method, "gaussian_window");
         assert_eq!(config.reduction.plate_model, "linear");
         assert_eq!(config.reduction.catalog_bright_limit_mag, 10.0);
         assert_eq!(config.reduction.catalog_faint_limit_mag, 18.0);

@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "station": {
+    "mpc_code": "F51",
+    "name": "Pan-STARRS 1",
+    "longitude_deg_east": 150.417,
+    "latitude_deg": 20.707,
+    "altitude_m": 3066.0,
+    "dut1_seconds": null,
+    "eop_updated_unix": null,
+    "telescope": "1.8-m f/4.4 Ritchey-Chretien + CCD",
+    "aperture_m": 1.8,
+    "focal_ratio": 4.4,
+    "detector": "CCD",
+    "observer_names": ["J. Bulger", "T. Lowe", "A. Schultz", "M. Willman"],
+    "measurer_names": ["T. Vorobjov", "PS1 Science Consortium"]
+  },
+  "submitter": "",
+  "instrument": {
+    "focal_length_mm": 8070.0,
+    "focal_length_tolerance_percent": 1.0,
+    "pixel_width_um": 10.0,
+    "pixel_height_um": 10.0,
+    "position_angle_deg": 323.0,
+    "position_angle_tolerance_deg": 1.0,
+    "pointing_tolerance_arcmin": 5.0,
+    "flip_horizontal": false,
+    "flip_vertical": false,
+    "auto_rotate_pierside": false,
+    "saturation_adu": 25000.0
+  },
+  "time": {
+    "date_obs_reference": "start",
+    "exposure_unit": "seconds",
+    "utc_offset_hours": 0.0,
+    "shutter_delay_seconds": 0.0,
+    "precision_seconds": 0.1,
+    "check_after_loading": true
+  },
+  "reduction": {
+    "astrometry_catalog": "Gaia3",
+    "detection_sigma": 4.0,
+    "minimum_fwhm_px": 1.2,
+    "maximum_centroid_fit_rms": 0.25,
+    "centroid_search_radius_px": 0.75,
+    "centroid_method": "gaussian_window",
+    "plate_model": "linear",
+    "catalog_bright_limit_mag": 13.0,
+    "catalog_faint_limit_mag": 22.0,
+    "maximum_reference_stars": 100,
+    "initial_match_radius_px": 2.0,
+    "astrometric_residual_limit_arcsec": 0.4,
+    "alignment_reference_stars": 30
+  },
+  "photometry": {
+    "catalog": "ATLAS2",
+    "reference_band": "G",
+    "aperture_mode": "fixed",
+    "aperture_fwhm_multiplier": 1.5,
+    "fixed_aperture_radius_px": 5.0,
+    "aperture_gap_px": 1.0,
+    "sky_annulus_inner_fwhm": 2.5,
+    "sky_annulus_outer_fwhm": 4.0,
+    "minimum_reference_stars": 8,
+    "maximum_catalog_error_mag": 0.1,
+    "maximum_residual_mag": 0.7,
+    "fit_color_term": false
+  },
+  "report": {
+    "default_format": "ades2022_psv",
+    "band": "C",
+    "include_magnitude": true,
+    "position_precision_1e6_deg": true,
+    "magnitude_precision_hundredth": false,
+    "allow_artificial_satellites": false
+  },
+  "data": {
+    "mpcorb_auto_update": true,
+    "mpcorb_max_age_hours": 24,
+    "known_object_mba_limit_mag": 22.0,
+    "known_object_tno_limit_mag": 20.0,
+    "known_object_magnitude_offset": 0.0
+  }
+}

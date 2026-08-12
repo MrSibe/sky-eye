@@ -5,7 +5,7 @@
 ## M0：可信核心与工程基线
 
 - [x] Tauri v2 + React 19 + TypeScript 项目可构建。
-- [x] FITS 基础读取、Header 展示、Canvas 显示、拉伸和多帧切换。
+- [x] CFITSIO 多 HDU/压缩读取、Header 诊断、WebGL2 shader 显示和双帧缓存。
 - [x] 建立 Git 基线与 MVP、架构、技术决策文档。
 - [x] 建立 `AstroTime`、`ImageFrame`、`Measurement` 核心类型。
 - [x] SEP Windows/MSVC 编译门禁。
@@ -13,7 +13,7 @@
 - [x] SEP 亚像素孔径 + sigma-clipped 天光环测光接口。
 - [x] TAN/CD 像素与天空坐标双向转换及往返测试。
 - [x] 移除伪造成功的 Plate Solve 占位结果。
-- [~] CFITSIO feature 已定义；需要 CMake 后完成 Windows 构建与压缩 FITS 测试。
+- [~] CFITSIO 已为唯一默认读取器并通过 Windows 源码构建；`.fits.fz` 与厂商 fixtures 仍需扩充。
 - [x] 大像素数组已从 JSON IPC 改为 Tauri raw `ArrayBuffer`；流式 tiles 后续按需要实现。
 
 ## M1：Data Reduction MVP
@@ -32,7 +32,8 @@
 
 ## M2：测量、测光与 Blink
 
-- [ ] 点击目标的质心与二维椭圆高斯 PSF 拟合。
+- [x] Gaussian-window 迭代质心与 SEP 亚像素孔径测光。
+- [ ] 二维椭圆高斯 PSF 拟合。
 - [ ] 输出 centroid/PSF 不确定度、FWHM、长短轴、方向和 flags。
 - [ ] ATLAS REFCAT2 查询、颜色项和零点稳健拟合。
 - [ ] 多帧星点配准和亚像素重采样。
