@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { open, save as saveDialog } from '@tauri-apps/plugin-dialog'
-import { FITSViewer } from './components/FITSViewer'
+import { useShallow } from 'zustand/react/shallow'
+import { FITSViewer, type FITSViewerHandle } from './components/FITSViewer'
 import { TitleBar } from './components/TitleBar'
 import { DisplaySidebar } from './components/DisplaySidebar'
 import { SciencePanel } from './components/SciencePanel'
@@ -77,7 +78,6 @@ function App() {
     error,
     isLoading,
     setMeta,
-    setRawPixels,
     setLoading,
     setError,
     setFilePath,
@@ -92,19 +92,44 @@ function App() {
     framePixels,
     currentFrameIndex,
     frameAnalyses,
+    isPlaying,
     setFrames,
     setBlinkState,
     cacheFramePixels,
-    pruneFramePixels,
+    setCurrentFrame,
     setDetection,
     setSolution,
     setFrameReduction,
     setIsDetecting,
     setIsSolving,
     resetSession,
-  } = useSessionStore()
+  } = useSessionStore(
+    // 精确订阅:无关字段(如 blinkPrep、speedMs)变化不再触发 App 全树更新
+    useShallow((state) => ({
+      detectedStars: state.detectedStars,
+      isDetecting: state.isDetecting,
+      isSolving: state.isSolving,
+      frames: state.frames,
+      framePixels: state.framePixels,
+      currentFrameIndex: state.currentFrameIndex,
+      frameAnalyses: state.frameAnalyses,
+      isPlaying: state.isPlaying,
+      setFrames: state.setFrames,
+      setBlinkState: state.setBlinkState,
+      cacheFramePixels: state.cacheFramePixels,
+      setCurrentFrame: state.setCurrentFrame,
+      setDetection: state.setDetection,
+      setSolution: state.setSolution,
+      setFrameReduction: state.setFrameReduction,
+      setIsDetecting: state.setIsDetecting,
+      setIsSolving: state.setIsSolving,
+      resetSession: state.resetSession,
+    })),
+  )
 
   const pixelLoadGeneration = useRef(0)
+  const viewerRef = useRef<FITSViewerHandle>(null)
+  const blinkGenRef = useRef(0)
   const [loadingProgress, setLoadingProgress] = useState<string | null>(null)
   const [reductionMessage, setReductionMessage] = useState<string | null>(null)
   const [reductionProgress, setReductionProgress] = useState<string | null>(null)
@@ -274,38 +299,64 @@ function App() {
     async (index: number, generation = pixelLoadGeneration.current) => {
       const frame = useSessionStore.getState().frames[index]
       if (!frame) return
-      let cached = useSessionStore.getState().framePixels[index]
-      if (!cached) {
-        const buffer = await getFramePixelBuffer(index)
-        if (generation !== pixelLoadGeneration.current) return
-        const pixels = new Float32Array(buffer)
-        cacheFramePixels(index, pixels, frame.width, frame.height)
-        cached = { pixels, width: frame.width, height: frame.height }
-      }
-      if (useSessionStore.getState().currentFrameIndex === index) {
-        setRawPixels(cached.pixels, cached.width, cached.height)
-      }
-      const total = useSessionStore.getState().frames.length
-      if (total > 1) {
-        const next = (index + 1) % total
-        if (!useSessionStore.getState().framePixels[next]) {
-          const nextFrame = useSessionStore.getState().frames[next]
-          const buffer = await getFramePixelBuffer(next)
-          if (generation !== pixelLoadGeneration.current) return
-          cacheFramePixels(next, new Float32Array(buffer), nextFrame.width, nextFrame.height)
-        }
-      }
-      if (useSessionStore.getState().currentFrameIndex === index) {
-        pruneFramePixels(index, total)
-      }
+      if (useSessionStore.getState().framePixels[index]) return
+      const buffer = await getFramePixelBuffer(index)
+      if (generation !== pixelLoadGeneration.current) return
+      const pixels = new Float32Array(buffer)
+      cacheFramePixels(index, pixels, frame.width, frame.height)
     },
-    [cacheFramePixels, pruneFramePixels, setRawPixels],
+    [cacheFramePixels],
   )
+
+  // 顺序预热整组 BlinkSet(2/4 帧):第 1 帧已显示,后台逐帧拉取并上传纹理("闪图准备 x/4")
+  const prepareBlinkSet = useCallback(async () => {
+    const gen = pixelLoadGeneration.current
+    const total = useSessionStore.getState().frames.length
+    if (total < 2) {
+      useSessionStore.getState().setBlinkPrep(null)
+      return
+    }
+    useSessionStore.getState().setBlinkPrep({ loaded: 1, total })
+    for (let index = 1; index < total; index++) {
+      await ensureFramePixels(index, gen)
+      if (gen !== pixelLoadGeneration.current) return
+      viewerRef.current?.prewarmFrame(index)
+      if (gen !== pixelLoadGeneration.current) return
+      useSessionStore.getState().setBlinkPrep({ loaded: index + 1, total })
+    }
+    if (gen === pixelLoadGeneration.current) {
+      useSessionStore.getState().setBlinkPrep(null)
+    }
+  }, [ensureFramePixels])
 
   useEffect(() => {
     if (!frames[currentFrameIndex]) return
     void ensureFramePixels(currentFrameIndex).catch((error) => setError(String(error)))
   }, [currentFrameIndex, ensureFramePixels, frames, setError])
+
+  // 本地播放索引:rAF + 时间累加器,热路径零 IPC;暂停/停止时把前端当前帧同步回 Rust
+  useEffect(() => {
+    if (!isPlaying || frames.length < 2) return
+    const gen = ++blinkGenRef.current
+    let rafId = 0
+    let lastSwitchAt = 0
+    const loop = (now: number) => {
+      if (gen !== blinkGenRef.current) return
+      if (now - lastSwitchAt >= useSessionStore.getState().speedMs) {
+        lastSwitchAt = now // 卡顿后不补 tick
+        const state = useSessionStore.getState()
+        state.setCurrentFrame((state.currentFrameIndex + 1) % state.frames.length)
+      }
+      rafId = requestAnimationFrame(loop)
+    }
+    lastSwitchAt = performance.now()
+    rafId = requestAnimationFrame(loop)
+    return () => {
+      cancelAnimationFrame(rafId)
+      // 科学命令仍读 Rust current_frame_index:暂停/停止时同步一次
+      void blinkSetFrame(useSessionStore.getState().currentFrameIndex).catch(() => {})
+    }
+  }, [frames.length, isPlaying, setCurrentFrame])
 
   const handleOpen = useCallback(async () => {
     try {
@@ -365,7 +416,6 @@ function App() {
 
       const firstPixels = new Float32Array(await getFramePixelBuffer(0))
       cacheFramePixels(0, firstPixels, first.width, first.height)
-      setRawPixels(firstPixels, first.width, first.height)
       writeFrontendLog(
         'debug',
         `Frame 1/${result.total}: w=${first.width} h=${first.height} pixels=${firstPixels.length} min=${first.min_val} max=${first.max_val}`,
@@ -378,6 +428,7 @@ function App() {
         const blinkState = await blinkGetState()
         setBlinkState(blinkState)
       }
+      void prepareBlinkSet()
     } catch (err) {
       setError(String(err))
     } finally {
@@ -386,7 +437,6 @@ function App() {
     }
   }, [
     setMeta,
-    setRawPixels,
     setLoading,
     setError,
     setFilePath,
@@ -395,6 +445,7 @@ function App() {
     cacheFramePixels,
     requestFit,
     setStretchLimits,
+    prepareBlinkSet,
   ])
 
   const handleCloseAllImages = useCallback(async () => {
@@ -402,7 +453,6 @@ function App() {
       await closeAllImages()
       resetSession()
       setMeta(null)
-      setRawPixels(null, 0, 0)
       setFilePath(null)
       setLoading(false)
       setError(null)
@@ -425,7 +475,7 @@ function App() {
     } catch (e) {
       setError(String(e))
     }
-  }, [resetSession, setError, setFilePath, setLoading, setMeta, setRawPixels, setStretchLimits])
+  }, [resetSession, setError, setFilePath, setLoading, setMeta, setStretchLimits])
 
   const handleMeasure = useCallback(
     async (x: number, y: number) => {
@@ -974,8 +1024,14 @@ function App() {
           variant="ghost"
           size="sm"
           onClick={() => handleReduction()}
-          disabled={frames.length === 0 || isDetecting || isSolving}
-          title={frames.length === 0 ? '请先打开 FITS 文件' : '执行图像归算'}
+          disabled={frames.length === 0 || isDetecting || isSolving || isPlaying}
+          title={
+            isPlaying
+              ? '闪图播放中，暂停后才能归算'
+              : frames.length === 0
+                ? '请先打开 FITS 文件'
+                : '执行图像归算'
+          }
         >
           <Orbit size={14} />
           归算
@@ -984,13 +1040,15 @@ function App() {
           variant={knownVisible ? 'tool' : 'ghost'}
           size="sm"
           onClick={handleKnownToggle}
-          disabled={knownSearchBusy || !knownPrerequisites}
+          disabled={knownSearchBusy || !knownPrerequisites || isPlaying}
           title={
-            !mpcorb
-              ? '请先下载 MPCORB'
-              : !knownPrerequisites
-                ? '需要整组图片都完成 WCS 归算并具有 UTC 曝光中点'
-                : '一次计算并显示整组图片中的已知小行星'
+            isPlaying
+              ? '闪图播放中，暂停后才能显示已知目标'
+              : !mpcorb
+                ? '请先下载 MPCORB'
+                : !knownPrerequisites
+                  ? '需要整组图片都完成 WCS 归算并具有 UTC 曝光中点'
+                  : '一次计算并显示整组图片中的已知小行星'
           }
         >
           {knownVisible ? <EyeOff size={14} /> : <Eye size={14} />}{' '}
@@ -1003,14 +1061,16 @@ function App() {
           size="sm"
           className={measurementMode ? 'bg-sky-control-hover text-sky-ink' : ''}
           onClick={() => setMeasurementMode((v) => !v)}
-          disabled={!canMeasure}
+          disabled={!canMeasure || isPlaying}
           aria-pressed={measurementMode}
           title={
-            canMeasure
-              ? measurementMode
-                ? '等待在图像上点击一个可疑目标'
-                : '点击后标记下一个可疑目标'
-              : '当前帧需要先通过 WCS 归算'
+            isPlaying
+              ? '闪图播放中，暂停后才能标记目标'
+              : canMeasure
+                ? measurementMode
+                  ? '等待在图像上点击一个可疑目标'
+                  : '点击后标记下一个可疑目标'
+                : '当前帧需要先通过 WCS 归算'
           }
         >
           <Crosshair size={14} />
@@ -1065,6 +1125,7 @@ function App() {
       <div className="flex-1 flex min-h-0">
         <div className="flex-1 relative">
           <FITSViewer
+            ref={viewerRef}
             stretchMode={stretchMode}
             inverted={inverted}
             manualCalibration={manualCalibration}

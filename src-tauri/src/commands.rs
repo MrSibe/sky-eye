@@ -25,7 +25,7 @@ use tauri::State;
 use tokio_util::sync::CancellationToken;
 
 pub struct AppState {
-    pub loaded_frames: Mutex<fits::registry::FrameRegistry>,
+    pub loaded_frames: Arc<Mutex<fits::registry::FrameRegistry>>,
     pub frame_analyses: Mutex<Vec<FrameAnalysis>>,
     pub current_frame_index: Mutex<usize>,
     pub blink_playing: Mutex<bool>,
@@ -42,7 +42,7 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         AppState {
-            loaded_frames: Mutex::new(fits::registry::FrameRegistry::default()),
+            loaded_frames: Arc::new(Mutex::new(fits::registry::FrameRegistry::default())),
             frame_analyses: Mutex::new(Vec::new()),
             current_frame_index: Mutex::new(0),
             blink_playing: Mutex::new(false),
@@ -381,13 +381,32 @@ pub async fn load_frames(
 }
 
 #[tauri::command]
-pub fn get_frame_pixel_buffer(state: State<AppState>, index: usize) -> Result<Response, String> {
-    let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-    let data = frames.get(index)?;
-    let mut bytes = Vec::with_capacity(data.pixels.len() * size_of::<f32>());
-    for pixel in &data.pixels {
-        bytes.extend_from_slice(&pixel.to_le_bytes());
-    }
+pub async fn get_frame_pixel_buffer(
+    state: State<'_, AppState>,
+    index: usize,
+) -> Result<Response, String> {
+    // 克隆 Arc 以便移入 blocking 闭包;锁只在闭包内、绝不在 await 上持有。
+    let registry = state.loaded_frames.clone();
+    let bytes: Vec<u8> = tauri::async_runtime::spawn_blocking(move || {
+        // 锁缩小到只取 Arc<FitsData>(owned),48~64MiB 字节拷贝在锁外进行。
+        let data = {
+            let mut frames = registry.lock().map_err(|e| e.to_string())?;
+            frames.get(index)?
+        };
+        let bytes = {
+            #[cfg(target_endian = "little")]
+            {
+                bytemuck::cast_slice::<f32, u8>(&data.pixels).to_vec()
+            }
+            #[cfg(target_endian = "big")]
+            {
+                data.pixels.iter().flat_map(|p| p.to_le_bytes()).collect()
+            }
+        };
+        Ok::<_, String>(bytes)
+    })
+    .await
+    .map_err(|e| format!("pixel-buffer worker failed: {e}"))??;
     Ok(Response::new(bytes))
 }
 

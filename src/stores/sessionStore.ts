@@ -23,6 +23,10 @@ interface SessionState {
   isPlaying: boolean
   speedMs: number
   frameAnalyses: Record<number, FrameAnalysis>
+  /** 序列标识,打开新序列时递增;纹理缓存 key 用它杜绝跨序列串图 */
+  sessionId: number
+  /** 闪图预热进度;null 表示已就绪(Ready) */
+  blinkPrep: { loaded: number; total: number } | null
 
   setDetection: (result: DetectionResult) => void
   setSolution: (result: PlateSolveResult) => void
@@ -38,12 +42,17 @@ interface SessionState {
   setFrames: (frames: FrameMeta[]) => void
   setBlinkState: (state: BlinkState) => void
   cacheFramePixels: (index: number, pixels: Float32Array, width: number, height: number) => void
-  pruneFramePixels: (currentIndex: number, total: number) => void
   setCurrentFrame: (index: number) => void
   setPlaying: (playing: boolean) => void
   setSpeedMs: (ms: number) => void
+  setBlinkPrep: (prep: { loaded: number; total: number } | null) => void
   resetSession: () => void
 }
+
+/** 稳定空数组(模块级,从未修改):未分析帧的 detectedStars 保持同一引用,避免每 tick 触发 overlay 重渲染 */
+const EMPTY_STARS: DetectedStar[] = []
+
+let nextSessionId = 1
 
 export const useSessionStore = create<SessionState>((set) => ({
   detectedStars: [],
@@ -58,6 +67,8 @@ export const useSessionStore = create<SessionState>((set) => ({
   isPlaying: false,
   speedMs: 300,
   frameAnalyses: {},
+  sessionId: nextSessionId++,
+  blinkPrep: null,
 
   setDetection: (result) =>
     set((state) => ({
@@ -109,7 +120,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       },
       ...(index === state.currentFrameIndex
         ? {
-            detectedStars: detection?.astrometry_stars ?? [],
+            detectedStars: detection?.astrometry_stars ?? EMPTY_STARS,
             noise: detection?.noise ?? 0,
             wcs: solution.wcs,
             solveSuccess: solution.success,
@@ -122,17 +133,24 @@ export const useSessionStore = create<SessionState>((set) => ({
     set({
       frames,
       frameAnalyses: {},
-      detectedStars: [],
+      detectedStars: EMPTY_STARS,
       noise: 0,
       wcs: null,
       solveSuccess: false,
+      framePixels: {},
+      currentFrameIndex: 0,
+      isPlaying: false,
+      // 新序列:递增 sessionId,BlinkSet 纹理 key 整体换代
+      sessionId: nextSessionId++,
+      blinkPrep: null,
     }),
   setBlinkState: (blink) =>
     set((state) => ({
       currentFrameIndex: blink.current_index,
       isPlaying: blink.playing,
       speedMs: blink.speed_ms,
-      detectedStars: state.frameAnalyses[blink.current_index]?.detection?.astrometry_stars ?? [],
+      detectedStars:
+        state.frameAnalyses[blink.current_index]?.detection?.astrometry_stars ?? EMPTY_STARS,
       noise: state.frameAnalyses[blink.current_index]?.detection?.noise ?? 0,
       wcs: state.frameAnalyses[blink.current_index]?.solution?.wcs ?? null,
       solveSuccess: state.frameAnalyses[blink.current_index]?.solution?.success ?? false,
@@ -141,29 +159,20 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((state) => ({
       framePixels: { ...state.framePixels, [index]: { pixels, width, height } },
     })),
-  pruneFramePixels: (currentIndex, total) =>
-    set((state) => {
-      if (total <= 0) return { framePixels: {} }
-      const nextIndex = total > 1 ? (currentIndex + 1) % total : currentIndex
-      const retained: SessionState['framePixels'] = {}
-      for (const index of [currentIndex, nextIndex]) {
-        if (state.framePixels[index]) retained[index] = state.framePixels[index]
-      }
-      return { framePixels: retained }
-    }),
   setCurrentFrame: (index) =>
     set((state) => ({
       currentFrameIndex: index,
-      detectedStars: state.frameAnalyses[index]?.detection?.astrometry_stars ?? [],
+      detectedStars: state.frameAnalyses[index]?.detection?.astrometry_stars ?? EMPTY_STARS,
       noise: state.frameAnalyses[index]?.detection?.noise ?? 0,
       wcs: state.frameAnalyses[index]?.solution?.wcs ?? null,
       solveSuccess: state.frameAnalyses[index]?.solution?.success ?? false,
     })),
   setPlaying: (playing) => set({ isPlaying: playing }),
   setSpeedMs: (ms) => set({ speedMs: ms }),
+  setBlinkPrep: (prep) => set({ blinkPrep: prep }),
   resetSession: () =>
     set({
-      detectedStars: [],
+      detectedStars: EMPTY_STARS,
       noise: 0,
       wcs: null,
       solveSuccess: false,
@@ -173,5 +182,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       isPlaying: false,
       speedMs: 300,
       frameAnalyses: {},
+      sessionId: nextSessionId++,
+      blinkPrep: null,
     }),
 }))

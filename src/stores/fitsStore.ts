@@ -5,9 +5,6 @@ import { writeFrontendLog } from '../lib/tauri'
 interface FitsState {
   filePath: string | null
   meta: FitsMeta | null
-  rawPixels: Float32Array | null
-  width: number
-  height: number
   isLoading: boolean
   error: string | null
   zoom: number
@@ -18,7 +15,6 @@ interface FitsState {
 
   setFilePath: (path: string | null) => void
   setMeta: (meta: FitsMeta | null) => void
-  setRawPixels: (pixels: Float32Array | null, width: number, height: number) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   setZoom: (zoom: number) => void
@@ -33,9 +29,6 @@ interface FitsState {
 export const useFitsStore = create<FitsState>((set) => ({
   filePath: null,
   meta: null,
-  rawPixels: null,
-  width: 0,
-  height: 0,
   isLoading: false,
   error: null,
   zoom: 1.0,
@@ -46,7 +39,6 @@ export const useFitsStore = create<FitsState>((set) => ({
 
   setFilePath: (path) => set({ filePath: path }),
   setMeta: (meta) => set({ meta }),
-  setRawPixels: (pixels, width, height) => set({ rawPixels: pixels, width, height }),
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => {
     if (error) writeFrontendLog('error', error, 'ui-error')

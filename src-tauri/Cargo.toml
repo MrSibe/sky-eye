@@ -50,5 +50,6 @@ log = { version = "0.4", features = ["std"] }
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "form", "query", "json"] }
 flate2 = "1"
 bincode = { version = "2", features = ["serde"] }
+bytemuck = "1"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "sync", "time"] }
 tokio-util = "0.7"

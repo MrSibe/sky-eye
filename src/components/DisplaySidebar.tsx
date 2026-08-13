@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Contrast, Maximize2, Play, Square } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useSessionStore } from '../stores/sessionStore'
-import { blinkNext, blinkPrev, blinkSetFrame, blinkSetSpeed, blinkToggle } from '../lib/tauri'
+import { blinkNext, blinkPrev, blinkSetFrame, blinkSetSpeed } from '../lib/tauri'
 import { Button } from './ui/button'
 import { Select } from './ui/form'
 import { Panel } from './ui/surface'
@@ -21,56 +22,40 @@ export function DisplaySidebar({
   onInvertedChange,
   onFitView,
 }: DisplaySidebarProps) {
-  const { frames, currentFrameIndex, isPlaying, speedMs, setBlinkState } = useSessionStore()
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = null
-
-    if (isPlaying && frames.length >= 2) {
-      timerRef.current = setInterval(async () => {
-        try {
-          setBlinkState(await blinkNext())
-        } catch {
-          /* ignore transient native errors */
-        }
-      }, speedMs)
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [frames.length, isPlaying, setBlinkState, speedMs])
-
-  const selectFrame = useCallback(
-    async (index: number) => {
-      try {
-        setBlinkState(await blinkSetFrame(index))
-      } catch {
-        /* ignore transient native errors */
-      }
-    },
-    [setBlinkState],
+  // 精确订阅:currentFrameIndex 每 tick 变化仅刷新本栏,不触发无关字段更新
+  const { frames, currentFrameIndex, speedMs, isPlaying, blinkPrep } = useSessionStore(
+    useShallow((s) => ({
+      frames: s.frames,
+      currentFrameIndex: s.currentFrameIndex,
+      speedMs: s.speedMs,
+      isPlaying: s.isPlaying,
+      blinkPrep: s.blinkPrep,
+    })),
   )
 
-  const changeFrame = useCallback(
-    async (direction: 'previous' | 'next') => {
-      try {
-        setBlinkState(direction === 'previous' ? await blinkPrev() : await blinkNext())
-      } catch {
-        /* ignore transient native errors */
-      }
-    },
-    [setBlinkState],
-  )
-
-  const toggleBlink = useCallback(async () => {
+  const selectFrame = useCallback(async (index: number) => {
+    if (useSessionStore.getState().isPlaying) return // 播放中忽略手动切帧
     try {
-      useSessionStore.getState().setPlaying(await blinkToggle())
+      useSessionStore.getState().setBlinkState(await blinkSetFrame(index))
     } catch {
       /* ignore transient native errors */
     }
+  }, [])
+
+  const changeFrame = useCallback(async (direction: 'previous' | 'next') => {
+    if (useSessionStore.getState().isPlaying) return // 播放中忽略手动切帧
+    try {
+      const state = useSessionStore.getState()
+      state.setBlinkState(direction === 'previous' ? await blinkPrev() : await blinkNext())
+    } catch {
+      /* ignore transient native errors */
+    }
+  }, [])
+
+  // 播放/暂停完全由前端本地驱动(播放索引在 App 侧 rAF 循环),不再经过 blinkToggle IPC
+  const toggleBlink = useCallback(() => {
+    const state = useSessionStore.getState()
+    state.setPlaying(!state.isPlaying)
   }, [])
 
   const setSpeed = useCallback((value: number) => {
@@ -106,7 +91,7 @@ export function DisplaySidebar({
       if (event.code === 'Space') {
         if (event.repeat) return
         event.preventDefault()
-        void toggleBlink()
+        toggleBlink()
         return
       }
 
@@ -219,8 +204,9 @@ export function DisplaySidebar({
               variant="ghost"
               size="sm"
               onClick={() => changeFrame('previous')}
+              disabled={isPlaying}
               aria-label="上一帧"
-              title="上一帧"
+              title={isPlaying ? '播放中无法切帧' : '上一帧'}
             >
               <ChevronLeft size={15} />
             </Button>
@@ -228,17 +214,33 @@ export function DisplaySidebar({
               variant="ghost"
               size="sm"
               onClick={toggleBlink}
+              disabled={blinkPrep != null}
               aria-label={isPlaying ? '停止闪烁' : '开始闪烁'}
-              title={isPlaying ? '停止' : '开始'}
+              title={
+                blinkPrep != null
+                  ? `闪图准备中 ${blinkPrep.loaded}/${blinkPrep.total}`
+                  : isPlaying
+                    ? '停止'
+                    : '开始'
+              }
             >
-              {isPlaying ? <Square size={13} /> : <Play size={14} />}
+              {blinkPrep != null ? (
+                <span className="font-mono text-[10px]">
+                  {blinkPrep.loaded}/{blinkPrep.total}
+                </span>
+              ) : isPlaying ? (
+                <Square size={13} />
+              ) : (
+                <Play size={14} />
+              )}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => changeFrame('next')}
+              disabled={isPlaying}
               aria-label="下一帧"
-              title="下一帧"
+              title={isPlaying ? '播放中无法切帧' : '下一帧'}
             >
               <ChevronRight size={15} />
             </Button>

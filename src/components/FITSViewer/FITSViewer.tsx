@@ -1,11 +1,13 @@
-import { useRef, useEffect, useCallback, useState } from 'react'
+import { useRef, useEffect, useCallback, useState, useImperativeHandle } from 'react'
 import { useFitsStore } from '../../stores/fitsStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { GaiaCalibrationOverlay, type ManualCalibrationState } from '../ManualCalibration'
 import type { EphemerisPoint, TargetMeasurement } from '../../lib/tauri'
 import { zscale } from '../../lib/stretch'
+import { FITSRenderer } from './fitsRenderer'
 
 interface FITSViewerProps {
+  ref?: React.Ref<FITSViewerHandle>
   stretchMode?: 'linear' | 'asinh'
   inverted?: boolean
   manualCalibration?: ManualCalibrationState | null
@@ -14,6 +16,11 @@ interface FITSViewerProps {
   onMeasure?: (x: number, y: number) => void
   measurements?: TargetMeasurement[]
   knownObjects?: EphemerisPoint[]
+}
+
+export interface FITSViewerHandle {
+  /** 只上传 index 帧纹理、不改变显示帧(顺序预热用)。 */
+  prewarmFrame: (index: number) => void
 }
 
 interface CursorMeasurement {
@@ -103,6 +110,7 @@ function skyToPixel(
 }
 
 export function FITSViewer({
+  ref,
   stretchMode = 'linear',
   inverted = true,
   manualCalibration,
@@ -114,15 +122,14 @@ export function FITSViewer({
 }: FITSViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const rendererRef = useRef<FITSRenderer | null>(null)
+  const [glEpoch, setGlEpoch] = useState(0)
   const isDragging = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
   const cursorImagePos = useRef<{ x: number; y: number } | null>(null)
   const [cursorMeasurement, setCursorMeasurement] = useState<CursorMeasurement | null>(null)
 
   const {
-    rawPixels,
-    width: imageWidth,
-    height: imageHeight,
     zoom,
     panX,
     panY,
@@ -134,7 +141,30 @@ export function FITSViewer({
     setStretchLimits,
   } = useFitsStore()
 
-  const { framePixels, currentFrameIndex, wcs, solveSuccess } = useSessionStore()
+  // 显示数据源:当前帧像素(来自 sessionStore.framePixels),不再经过 fitsStore.rawPixels
+  const currentFrameIndex = useSessionStore((s) => s.currentFrameIndex)
+  const currentFrame = useSessionStore((s) => s.framePixels[currentFrameIndex])
+  const wcs = useSessionStore((s) => s.wcs)
+  const solveSuccess = useSessionStore((s) => s.solveSuccess)
+
+  const imageWidth = currentFrame?.width ?? 0
+  const imageHeight = currentFrame?.height ?? 0
+  const hasImage = !!currentFrame
+
+  // 命令式 handle:顺序预热期间只上传纹理,不切换显示帧
+  useImperativeHandle(
+    ref,
+    () => ({
+      prewarmFrame: (index: number) => {
+        const s = useSessionStore.getState()
+        const frame = s.framePixels[index]
+        const renderer = rendererRef.current
+        if (!frame || !renderer) return
+        renderer.prewarm(`${s.sessionId}:${index}`, frame.pixels, frame.width, frame.height)
+      },
+    }),
+    [],
+  )
 
   useEffect(() => {
     if (!imageWidth || !imageHeight || !containerRef.current) return
@@ -172,95 +202,45 @@ export function FITSViewer({
     return () => observer.disconnect()
   }, [imageHeight, imageWidth, zoom])
 
+  // WebGL 生命周期独立于当前帧:canvas 稳定挂载,仅在有图/context 恢复时(重建)创建 renderer
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !rawPixels || !imageWidth || !imageHeight) return
-    const gl = canvas.getContext('webgl2', { alpha: false, antialias: false })
-    if (!gl) return
-    const vertexSource = `#version 300 es
-      in vec2 position;
-      out vec2 uv;
-      void main() { uv = position * 0.5 + 0.5; gl_Position = vec4(position, 0.0, 1.0); }`
-    const fragmentSource = `#version 300 es
-      precision highp float;
-      uniform sampler2D image;
-      uniform float blackPoint;
-      uniform float whitePoint;
-      uniform bool useAsinh;
-      uniform bool inverted;
-      in vec2 uv;
-      out vec4 color;
-      void main() {
-        float source = texture(image, vec2(uv.x, 1.0 - uv.y)).r;
-        float value = clamp((source - blackPoint) / max(whitePoint - blackPoint, 1.0e-20), 0.0, 1.0);
-        if (useAsinh) value = asinh(value * 10.0) / asinh(10.0);
-        if (inverted) value = 1.0 - value;
-        if (isnan(source) || isinf(source)) value = inverted ? 1.0 : 0.0;
-        color = vec4(value, value, value, 1.0);
-      }`
-    const compile = (type: number, source: string) => {
-      const shader = gl.createShader(type)
-      if (!shader) throw new Error('WebGL2 shader allocation failed')
-      gl.shaderSource(shader, source)
-      gl.compileShader(shader)
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        throw new Error(gl.getShaderInfoLog(shader) ?? 'WebGL2 shader compile failed')
-      }
-      return shader
-    }
-    const program = gl.createProgram()
-    if (!program) return
-    const vertex = compile(gl.VERTEX_SHADER, vertexSource)
-    const fragment = compile(gl.FRAGMENT_SHADER, fragmentSource)
-    gl.attachShader(program, vertex)
-    gl.attachShader(program, fragment)
-    gl.linkProgram(program)
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      throw new Error(gl.getProgramInfoLog(program) ?? 'WebGL2 program link failed')
-    }
-    canvas.width = imageWidth
-    canvas.height = imageHeight
-    gl.viewport(0, 0, imageWidth, imageHeight)
-    gl.useProgram(program)
-    const vertices = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertices)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
-    const position = gl.getAttribLocation(program, 'position')
-    gl.enableVertexAttribArray(position)
-    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
-    const texture = gl.createTexture()
-    gl.bindTexture(gl.TEXTURE_2D, texture)
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.R32F,
-      imageWidth,
-      imageHeight,
-      0,
-      gl.RED,
-      gl.FLOAT,
-      rawPixels,
-    )
-    const limits = stretchLimits ?? zscale(rawPixels, imageWidth, imageHeight)
-    if (!stretchLimits) setStretchLimits(limits)
-    gl.uniform1f(gl.getUniformLocation(program, 'blackPoint'), limits.z1)
-    gl.uniform1f(gl.getUniformLocation(program, 'whitePoint'), limits.z2)
-    gl.uniform1i(gl.getUniformLocation(program, 'useAsinh'), stretchMode === 'asinh' ? 1 : 0)
-    gl.uniform1i(gl.getUniformLocation(program, 'inverted'), inverted ? 1 : 0)
-    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    if (!canvas || !hasImage) return
+    const renderer = new FITSRenderer(canvas, () => setGlEpoch((epoch) => epoch + 1))
+    rendererRef.current = renderer
     return () => {
-      gl.deleteTexture(texture)
-      gl.deleteBuffer(vertices)
-      gl.deleteShader(vertex)
-      gl.deleteShader(fragment)
-      gl.deleteProgram(program)
+      if (rendererRef.current === renderer) rendererRef.current = null
+      renderer.dispose()
     }
-  }, [imageHeight, imageWidth, inverted, rawPixels, setStretchLimits, stretchLimits, stretchMode])
+  }, [glEpoch, hasImage])
+
+  // 播放热路径:每 tick 只走 bindTexture + setUniforms + drawArrays,零上传/零编译
+  useEffect(() => {
+    const renderer = rendererRef.current
+    if (!renderer || !currentFrame) return
+    const limits =
+      stretchLimits ?? zscale(currentFrame.pixels, currentFrame.width, currentFrame.height)
+    if (!stretchLimits) setStretchLimits(limits)
+    const s = useSessionStore.getState()
+    renderer.showFrame({
+      key: `${s.sessionId}:${currentFrameIndex}`,
+      pixels: currentFrame.pixels,
+      width: currentFrame.width,
+      height: currentFrame.height,
+      z1: limits.z1,
+      z2: limits.z2,
+      stretchMode,
+      inverted,
+    })
+  }, [
+    currentFrame,
+    currentFrameIndex,
+    glEpoch,
+    inverted,
+    setStretchLimits,
+    stretchLimits,
+    stretchMode,
+  ])
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -288,27 +268,26 @@ export function FITSViewer({
 
   const updateCursorMeasurement = useCallback(
     (x: number, y: number) => {
-      if (!rawPixels || !imageWidth || !imageHeight) {
+      const frame = useSessionStore.getState().framePixels[currentFrameIndex]
+      if (!frame) {
         setCursorMeasurement(null)
         return
       }
       const pixelX = Math.floor(x)
       const pixelY = Math.floor(y)
-      const pixels = framePixels[currentFrameIndex]?.pixels
-
-      if (pixels && pixelX >= 0 && pixelX < imageWidth && pixelY >= 0 && pixelY < imageHeight) {
+      if (pixelX >= 0 && pixelX < imageWidth && pixelY >= 0 && pixelY < imageHeight) {
         const sky = wcs && solveSuccess ? pixelToSky(x, y, wcs) : null
         setCursorMeasurement({
           x,
           y,
-          value: pixels[pixelY * imageWidth + pixelX],
+          value: frame.pixels[pixelY * imageWidth + pixelX],
           ...(sky ?? {}),
         })
       } else {
         setCursorMeasurement(null)
       }
     },
-    [currentFrameIndex, framePixels, imageHeight, imageWidth, rawPixels, solveSuccess, wcs],
+    [currentFrameIndex, imageHeight, imageWidth, solveSuccess, wcs],
   )
 
   useEffect(() => {
@@ -318,14 +297,14 @@ export function FITSViewer({
 
   const handleImagePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!rawPixels || !imageWidth || !imageHeight) return
+      if (!imageWidth || !imageHeight) return
       const bounds = e.currentTarget.getBoundingClientRect()
       const x = ((e.clientX - bounds.left) * imageWidth) / bounds.width
       const y = ((e.clientY - bounds.top) * imageHeight) / bounds.height
       cursorImagePos.current = { x, y }
       updateCursorMeasurement(x, y)
     },
-    [imageHeight, imageWidth, rawPixels, updateCursorMeasurement],
+    [imageHeight, imageWidth, updateCursorMeasurement],
   )
 
   const handleCanvasPointerMove = useCallback(
@@ -380,106 +359,104 @@ export function FITSViewer({
       onPointerCancel={handlePointerUp}
       onContextMenu={(event) => event.preventDefault()}
     >
-      {rawPixels && imageWidth > 0 && imageHeight > 0 ? (
-        <>
-          <div
-            className="absolute cursor-crosshair"
-            style={{
-              // Keep the canvas centered in screen coordinates before scaling.
-              // Negative margins used here previously stayed at the unscaled
-              // FITS size and moved large images completely outside the viewport.
-              transform: `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${zoom})`,
-              transformOrigin: 'center center',
-              left: '50%',
-              top: '50%',
-              width: imageWidth,
-              height: imageHeight,
-            }}
-            onPointerMove={handleImagePointerMove}
-            onClick={handleClick}
-            onPointerLeave={() => {
-              cursorImagePos.current = null
-              setCursorMeasurement(null)
-            }}
+      {/* canvas 稳定挂载:无图时 visibility hidden,不清除 WebGL context */}
+      <div
+        className="absolute cursor-crosshair"
+        style={{
+          // Keep the canvas centered in screen coordinates before scaling.
+          // Negative margins used here previously stayed at the unscaled
+          // FITS size and moved large images completely outside the viewport.
+          transform: `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${zoom})`,
+          transformOrigin: 'center center',
+          left: '50%',
+          top: '50%',
+          width: imageWidth,
+          height: imageHeight,
+          visibility: hasImage ? 'visible' : 'hidden',
+        }}
+        onPointerMove={handleImagePointerMove}
+        onClick={handleClick}
+        onPointerLeave={() => {
+          cursorImagePos.current = null
+          setCursorMeasurement(null)
+        }}
+      >
+        <canvas ref={canvasRef} className="absolute inset-0" />
+        {hasImage && manualCalibration && onManualOffsetChange && (
+          <GaiaCalibrationOverlay
+            width={imageWidth}
+            height={imageHeight}
+            calibration={manualCalibration}
+            onOffsetChange={onManualOffsetChange}
+          />
+        )}
+        {hasImage && (
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            viewBox={`0 0 ${imageWidth} ${imageHeight}`}
           >
-            <canvas ref={canvasRef} className="absolute inset-0" />
-            {manualCalibration && onManualOffsetChange && (
-              <GaiaCalibrationOverlay
-                width={imageWidth}
-                height={imageHeight}
-                calibration={manualCalibration}
-                onOffsetChange={onManualOffsetChange}
-              />
-            )}
-            <svg
-              className="pointer-events-none absolute inset-0 h-full w-full"
-              viewBox={`0 0 ${imageWidth} ${imageHeight}`}
-            >
-              {measurements
-                .filter((m) => m.frame_index === currentFrameIndex)
-                .map((m) => (
-                  <g key={m.id}>
+            {measurements
+              .filter((m) => m.frame_index === currentFrameIndex)
+              .map((m) => (
+                <g key={m.id}>
+                  <circle
+                    cx={m.x}
+                    cy={m.y}
+                    r={Math.max(4 / zoom, m.aperture_radius_px)}
+                    fill="none"
+                    stroke="#fb7185"
+                    strokeWidth={1.5 / zoom}
+                  />
+                </g>
+              ))}
+            {wcs &&
+              knownObjects.map((o) => {
+                const p = skyToPixel(o.ra_deg, o.dec_deg, wcs)
+                return p && p.x >= 0 && p.y >= 0 && p.x < imageWidth && p.y < imageHeight ? (
+                  <g key={o.designation}>
                     <circle
-                      cx={m.x}
-                      cy={m.y}
-                      r={Math.max(4 / zoom, m.aperture_radius_px)}
+                      cx={p.x}
+                      cy={p.y}
+                      r={10 / zoom}
                       fill="none"
-                      stroke="#fb7185"
-                      strokeWidth={1.5 / zoom}
+                      stroke={o.quality !== 'degraded_time' ? '#22d3ee' : '#f59e0b'}
+                      strokeWidth={1.4 / zoom}
                     />
+                    <text
+                      x={p.x + 12 / zoom}
+                      y={p.y - 8 / zoom}
+                      fontSize={11 / zoom}
+                      fill={o.quality !== 'degraded_time' ? '#22d3ee' : '#f59e0b'}
+                    >
+                      {o.designation}
+                    </text>
                   </g>
-                ))}
-              {wcs &&
-                knownObjects.map((o) => {
-                  const p = skyToPixel(o.ra_deg, o.dec_deg, wcs)
-                  return p && p.x >= 0 && p.y >= 0 && p.x < imageWidth && p.y < imageHeight ? (
-                    <g key={o.designation}>
-                      <circle
-                        cx={p.x}
-                        cy={p.y}
-                        r={10 / zoom}
-                        fill="none"
-                        stroke={o.quality !== 'degraded_time' ? '#22d3ee' : '#f59e0b'}
-                        strokeWidth={1.4 / zoom}
-                      />
-                      <text
-                        x={p.x + 12 / zoom}
-                        y={p.y - 8 / zoom}
-                        fontSize={11 / zoom}
-                        fill={o.quality !== 'degraded_time' ? '#22d3ee' : '#f59e0b'}
-                      >
-                        {o.designation}
-                      </text>
-                    </g>
-                  ) : null
-                })}
-            </svg>
-          </div>
-          {cursorMeasurement && (
-            <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded bg-sky-canvas/85 px-2 py-1 font-mono text-[10px] leading-4 text-sky-body backdrop-blur-sm">
-              <span>X {cursorMeasurement.x.toFixed(1)}</span>
-              <span>Y {cursorMeasurement.y.toFixed(1)}</span>
-              <span>
-                L{' '}
-                {Number.isFinite(cursorMeasurement.value)
-                  ? cursorMeasurement.value.toFixed(2)
-                  : '—'}
-              </span>
-              {cursorMeasurement.ra != null && cursorMeasurement.dec != null && (
-                <>
-                  <span className="h-3 w-px bg-sky-hairline-strong" aria-hidden="true" />
-                  <span>RA {cursorMeasurement.ra.toFixed(6)}°</span>
-                  <span>Dec {cursorMeasurement.dec.toFixed(6)}°</span>
-                </>
-              )}
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="flex h-full items-center justify-center text-sky-mute select-none">
+                ) : null
+              })}
+          </svg>
+        )}
+      </div>
+      {!hasImage && (
+        <div className="absolute inset-0 flex items-center justify-center text-sky-mute select-none">
           <div className="text-center">
             <p className="text-lg mb-2">打开 FITS 文件开始</p>
           </div>
+        </div>
+      )}
+      {hasImage && cursorMeasurement && (
+        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded bg-sky-canvas/85 px-2 py-1 font-mono text-[10px] leading-4 text-sky-body backdrop-blur-sm">
+          <span>X {cursorMeasurement.x.toFixed(1)}</span>
+          <span>Y {cursorMeasurement.y.toFixed(1)}</span>
+          <span>
+            L {Number.isFinite(cursorMeasurement.value) ? cursorMeasurement.value.toFixed(2) : '—'}
+          </span>
+          {cursorMeasurement.ra != null && cursorMeasurement.dec != null && (
+            <>
+              <span className="h-3 w-px bg-sky-hairline-strong" aria-hidden="true" />
+              <span>RA {cursorMeasurement.ra.toFixed(6)}°</span>
+              <span>Dec {cursorMeasurement.dec.toFixed(6)}°</span>
+            </>
+          )}
         </div>
       )}
     </div>
