@@ -14,7 +14,7 @@ export function MessageDialog({ tone, title, message, onClose }: MessageDialogPr
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 top-9 z-[110] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px]"
+      className="fixed inset-x-0 bottom-0 top-9 z-[110] grid place-items-center bg-black/50 px-4"
       role={isSuccess ? 'dialog' : 'alertdialog'}
       aria-modal="true"
       aria-labelledby="message-dialog-title"
@@ -23,17 +23,15 @@ export function MessageDialog({ tone, title, message, onClose }: MessageDialogPr
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="w-[min(380px,calc(100vw-32px))] rounded-lg border border-sky-hairline-strong bg-sky-overlay p-5 shadow-2xl">
+      <div className="w-[min(380px,calc(100vw-32px))] rounded-lg border border-sky-hairline bg-sky-canvas-soft p-5">
         <div className="flex items-start gap-4">
-          <div
+          <Icon
+            size={18}
+            aria-hidden="true"
             className={
-              isSuccess
-                ? 'grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sky-success/10 text-sky-success'
-                : 'grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sky-error/10 text-sky-error'
+              isSuccess ? 'mt-0.5 shrink-0 text-sky-success' : 'mt-0.5 shrink-0 text-sky-error'
             }
-          >
-            <Icon size={18} aria-hidden="true" />
-          </div>
+          />
           <div className="min-w-0 flex-1">
             <h2 id="message-dialog-title" className="text-[13px] font-medium text-sky-ink">
               {title}

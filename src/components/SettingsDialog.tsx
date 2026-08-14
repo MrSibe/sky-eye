@@ -282,12 +282,12 @@ export function SettingsDialog({
   if (!draft)
     return (
       <div
-        className="fixed inset-x-0 bottom-0 top-9 z-[120] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px]"
+        className="fixed inset-x-0 bottom-0 top-9 z-[120] grid place-items-center bg-black/50 px-4"
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-loading-title"
       >
-        <section className="w-[360px] rounded-lg border border-sky-hairline-strong bg-sky-overlay p-5 shadow-2xl">
+        <section className="w-[360px] rounded-lg border border-sky-hairline bg-sky-canvas-soft p-5">
           <div className="flex items-center justify-between">
             <h2 id="settings-loading-title" className="text-[13px] font-medium text-sky-ink">
               软件设置
@@ -344,15 +344,15 @@ export function SettingsDialog({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 top-9 z-[120] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px]"
+      className="fixed inset-x-0 bottom-0 top-9 z-[120] grid place-items-center bg-black/50 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-title"
     >
-      <section className="flex h-[min(760px,calc(100vh-64px))] w-[min(980px,calc(100vw-28px))] overflow-hidden rounded-lg border border-sky-hairline-strong bg-sky-overlay shadow-2xl">
+      <section className="flex h-[min(760px,calc(100vh-64px))] w-[min(980px,calc(100vw-28px))] overflow-hidden rounded-lg border border-sky-hairline bg-sky-canvas-soft">
         <aside className="flex w-48 shrink-0 flex-col border-r border-sky-hairline bg-sky-canvas-soft">
           <div className="border-b border-sky-hairline px-4 py-4">
-            <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-md border border-sky-primary/30 bg-sky-primary/10 text-sky-primary">
+            <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-md border border-sky-hairline bg-sky-canvas text-sky-body">
               <SlidersHorizontal size={15} />
             </div>
             <h2 id="settings-title" className="text-[13px] font-semibold text-sky-ink">
@@ -369,7 +369,7 @@ export function SettingsDialog({
                 <button
                   key={item.id}
                   onClick={() => selectTab(item.id)}
-                  className={`flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-[11px] transition-colors ${tab === item.id ? 'bg-sky-primary text-white' : 'text-sky-body hover:bg-sky-control-hover hover:text-sky-ink'}`}
+                  className={`flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-[11px] transition-colors ${tab === item.id ? 'relative bg-sky-control-hover text-sky-ink before:absolute before:left-0 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-sky-primary' : 'text-sky-body hover:bg-sky-control-hover hover:text-sky-ink'}`}
                 >
                   <Icon size={14} />
                   {item.label}
@@ -1489,9 +1489,8 @@ export function SettingsDialog({
               <div className="space-y-5">
                 <section className="overflow-hidden rounded-lg border border-sky-hairline-strong bg-sky-canvas-soft">
                   <div className="relative px-5 py-6">
-                    <div className="pointer-events-none absolute -right-14 -top-20 h-44 w-44 rounded-full border border-sky-primary/20 bg-sky-primary/5" />
                     <div className="relative flex items-start gap-4">
-                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-sky-primary/35 bg-sky-primary/10 font-mono text-[15px] font-semibold tracking-[0.14em] text-sky-primary">
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-sky-hairline-strong bg-sky-canvas font-mono text-[15px] font-semibold tracking-[0.14em] text-sky-body">
                         SE
                       </div>
                       <div>

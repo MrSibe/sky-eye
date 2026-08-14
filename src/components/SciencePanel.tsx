@@ -30,16 +30,16 @@ export function SciencePanel(p: Props) {
   }, [p.measurements])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="science-panel-title"
-        className="flex h-[min(680px,calc(100vh-2rem))] w-[min(940px,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-sky-hairline-strong bg-sky-canvas shadow-2xl"
+        className="flex h-[min(680px,calc(100vh-2rem))] w-[min(940px,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-sky-hairline bg-sky-canvas-soft"
       >
         <header className="flex items-center justify-between border-b border-sky-hairline px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid size-9 shrink-0 place-items-center rounded-md border border-sky-hairline bg-sky-panel text-sky-primary">
+            <div className="grid size-9 shrink-0 place-items-center rounded-md border border-sky-hairline bg-sky-canvas text-sky-body">
               <ListChecks size={17} />
             </div>
             <div className="min-w-0">
@@ -51,14 +51,20 @@ export function SciencePanel(p: Props) {
               </div>
             </div>
           </div>
-          <Button size="icon" variant="ghost" onClick={p.onClose} aria-label="关闭可疑目标列表">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={p.onClose}
+            onMouseDown={(event) => event.preventDefault()}
+            aria-label="关闭可疑目标列表"
+          >
             <X size={16} />
           </Button>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-[11px]">
           {p.measurements.length === 0 ? (
-            <div className="grid h-full min-h-52 place-items-center rounded-md border border-dashed border-sky-hairline-strong bg-sky-panel/30 px-6 text-center">
+            <div className="grid h-full min-h-52 place-items-center rounded-md border border-dashed border-sky-hairline-strong bg-sky-canvas-soft/30 px-6 text-center">
               <div>
                 <div className="text-sm text-sky-body">还没有可疑目标</div>
                 <div className="mt-2 max-w-md text-[11px] leading-5 text-sky-mute">
@@ -69,7 +75,7 @@ export function SciencePanel(p: Props) {
             </div>
           ) : (
             <div className="overflow-hidden rounded-md border border-sky-hairline">
-              <div className="grid grid-cols-[168px_110px_minmax(190px,1fr)_minmax(150px,0.8fr)_40px] gap-3 border-b border-sky-hairline bg-sky-panel/70 px-3 py-2 text-[9px] uppercase tracking-[0.12em] text-sky-mute">
+              <div className="grid grid-cols-[168px_110px_minmax(190px,1fr)_minmax(150px,0.8fr)_40px] gap-3 border-b border-sky-hairline bg-sky-canvas-soft px-3 py-2 text-[9px] uppercase tracking-[0.12em] text-sky-mute">
                 <span>目标名称</span>
                 <span>测量</span>
                 <span>天球坐标</span>
@@ -82,7 +88,7 @@ export function SciencePanel(p: Props) {
                 return (
                   <div
                     key={measurement.id}
-                    className="grid grid-cols-[168px_110px_minmax(190px,1fr)_minmax(150px,0.8fr)_40px] items-start gap-3 border-b border-sky-hairline px-3 py-3 last:border-b-0 hover:bg-sky-panel/35"
+                    className="grid grid-cols-[168px_110px_minmax(190px,1fr)_minmax(150px,0.8fr)_40px] items-start gap-3 border-b border-sky-hairline px-3 py-3 last:border-b-0 hover:bg-sky-control-hover/40"
                   >
                     <div>
                       <input
@@ -134,6 +140,7 @@ export function SciencePanel(p: Props) {
                       size="icon"
                       variant="ghost"
                       onClick={() => p.onDelete(measurement.id)}
+                      onMouseDown={(event) => event.preventDefault()}
                       disabled={p.busy}
                       aria-label="删除可疑目标"
                       title="删除可疑目标"
@@ -147,7 +154,7 @@ export function SciencePanel(p: Props) {
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-4 border-t border-sky-hairline bg-sky-panel/35 px-5 py-3">
+        <footer className="flex items-center justify-between gap-4 border-t border-sky-hairline bg-sky-canvas-soft px-5 py-3">
           <div className="text-[10px] text-sky-mute">
             {!p.canMatch && '如需轨迹匹配，请先在“设置 > 数据管理”下载 MPCORB。'}
           </div>
@@ -156,6 +163,7 @@ export function SciencePanel(p: Props) {
               size="sm"
               variant="ghost"
               onClick={() => void openUrl('https://minorplanetcenter.net/cgi-bin/checkmp.cgi')}
+              onMouseDown={(event) => event.preventDefault()}
               disabled={p.busy || p.measurements.length === 0}
             >
               MPC MPChecker
@@ -164,11 +172,12 @@ export function SciencePanel(p: Props) {
               size="sm"
               variant="ghost"
               onClick={p.onMatch}
+              onMouseDown={(event) => event.preventDefault()}
               disabled={p.busy || !p.canMatch || p.measurements.length < 2}
             >
               匹配 tracklet
             </Button>
-            <Button size="sm" onClick={p.onClose}>
+            <Button size="sm" onClick={p.onClose} onMouseDown={(event) => event.preventDefault()}>
               完成
             </Button>
           </div>

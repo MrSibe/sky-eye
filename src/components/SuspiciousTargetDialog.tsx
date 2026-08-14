@@ -74,7 +74,7 @@ function TargetCutout({
         aria-label="可疑目标局部放大图"
       />
       <div
-        className="pointer-events-none absolute left-1/2 top-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full border border-rose-400 shadow-[0_0_0_1px_rgba(0,0,0,.35)]"
+        className="pointer-events-none absolute left-1/2 top-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-accent-yellow"
         style={{
           width: `${Math.min(50, Math.max(6, (measurement.aperture_radius_px / 32) * 100))}%`,
         }}
@@ -118,14 +118,14 @@ export function SuspiciousTargetDialog({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 top-9 z-[130] grid place-items-center bg-black/65 px-4 backdrop-blur-[3px]"
+      className="fixed inset-x-0 bottom-0 top-9 z-[130] grid place-items-center bg-black/50 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="suspicious-target-title"
     >
-      <section className="max-h-[calc(100vh-64px)] w-[min(720px,calc(100vw-32px))] overflow-y-auto rounded-lg border border-sky-hairline-strong bg-sky-overlay shadow-2xl">
+      <section className="max-h-[calc(100vh-64px)] w-[min(720px,calc(100vw-32px))] overflow-y-auto rounded-lg border border-sky-hairline bg-sky-canvas-soft">
         <header className="flex items-center gap-3 border-b border-sky-hairline px-5 py-3.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-rose-400/30 bg-rose-400/10 text-rose-300">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-sky-hairline bg-sky-canvas text-sky-body">
             <ScanSearch size={17} />
           </div>
           <div>
@@ -143,7 +143,7 @@ export function SuspiciousTargetDialog({
           <div className="flex min-w-0 flex-col gap-3">
             <section className="rounded-md border border-sky-hairline bg-sky-canvas px-3 py-2">
               <div className="mb-1 flex items-center gap-2 border-b border-sky-hairline pb-2 text-[10px] font-medium text-sky-body">
-                <Crosshair size={12} className="text-rose-300" />
+                <Crosshair size={12} className="text-sky-body" />
                 测量结果
               </div>
               <Metric
@@ -167,7 +167,7 @@ export function SuspiciousTargetDialog({
               />
             </section>
             {measurement.flags.length > 0 && (
-              <div className="rounded-md border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-[9px] leading-4 text-amber-200">
+              <div className="rounded-md border border-sky-accent-yellow/30 bg-sky-accent-yellow/5 px-3 py-2 text-[9px] leading-4 text-sky-accent-yellow">
                 质量标志：{measurement.flags.join(', ')}
               </div>
             )}
@@ -196,7 +196,7 @@ export function SuspiciousTargetDialog({
             aria-invalid={Boolean(error)}
             aria-describedby="suspicious-target-help"
             placeholder="例如 SKY001"
-            className={`h-10 w-full rounded-md border bg-sky-canvas px-3 font-mono text-[13px] tracking-[0.08em] text-sky-ink outline-none transition-colors placeholder:tracking-normal placeholder:text-sky-mute ${error ? 'border-sky-error focus:border-sky-error' : 'border-sky-hairline-strong focus:border-rose-300/70'}`}
+            className={`h-10 w-full rounded-md border bg-sky-canvas px-3 font-mono text-[13px] tracking-[0.08em] text-sky-ink outline-none transition-colors placeholder:tracking-normal placeholder:text-sky-mute ${error ? 'border-sky-error focus:border-sky-error' : 'border-sky-hairline-strong focus:border-sky-accent-yellow'}`}
           />
           <div
             id="suspicious-target-help"

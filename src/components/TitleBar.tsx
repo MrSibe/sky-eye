@@ -26,6 +26,7 @@ export function TitleBar({ settingsOpen = false, onSettings }: TitleBarProps) {
           variant={settingsOpen ? 'active' : 'ghost'}
           size="icon"
           onClick={onSettings}
+          onMouseDown={(event) => event.preventDefault()}
           className="h-9 w-10 rounded-none"
           aria-label="设置"
           title="编辑 config/settings.json"
@@ -36,6 +37,7 @@ export function TitleBar({ settingsOpen = false, onSettings }: TitleBarProps) {
           variant="ghost"
           size="icon"
           onClick={() => appWindow?.minimize()}
+          onMouseDown={(event) => event.preventDefault()}
           disabled={!appWindow}
           className="h-9 w-10 rounded-none"
           aria-label="最小化"
@@ -47,6 +49,7 @@ export function TitleBar({ settingsOpen = false, onSettings }: TitleBarProps) {
           variant="ghost"
           size="icon"
           onClick={() => appWindow?.toggleMaximize()}
+          onMouseDown={(event) => event.preventDefault()}
           disabled={!appWindow}
           className="h-9 w-10 rounded-none"
           aria-label="最大化或还原"
@@ -58,6 +61,7 @@ export function TitleBar({ settingsOpen = false, onSettings }: TitleBarProps) {
           variant="ghost"
           size="icon"
           onClick={() => appWindow?.close()}
+          onMouseDown={(event) => event.preventDefault()}
           disabled={!appWindow}
           className="h-9 w-10 rounded-none hover:bg-sky-error hover:text-white"
           aria-label="关闭"

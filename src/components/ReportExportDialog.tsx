@@ -20,12 +20,12 @@ export function ReportExportDialog({
 }: Props) {
   return (
     <div
-      className="fixed inset-x-0 bottom-0 top-9 z-[120] grid place-items-center bg-black/55 px-4 backdrop-blur-[2px]"
+      className="fixed inset-x-0 bottom-0 top-9 z-[120] grid place-items-center bg-black/50 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="report-export-title"
     >
-      <section className="flex h-[min(620px,calc(100vh-68px))] w-[min(760px,calc(100vw-32px))] flex-col overflow-hidden rounded-lg border border-sky-hairline-strong bg-sky-overlay shadow-2xl">
+      <section className="flex h-[min(620px,calc(100vh-68px))] w-[min(760px,calc(100vw-32px))] flex-col overflow-hidden rounded-lg border border-sky-hairline bg-sky-canvas-soft">
         <header className="flex shrink-0 items-center justify-between border-b border-sky-hairline px-5 py-3">
           <div>
             <h2 id="report-export-title" className="text-[13px] font-medium text-sky-ink">

@@ -6,6 +6,7 @@ import { blinkNext, blinkPrev, blinkSetFrame, blinkSetSpeed } from '../lib/tauri
 import { Button } from './ui/button'
 import { Select } from './ui/form'
 import { Panel } from './ui/surface'
+import { IconButton } from './ui/tooltip'
 
 interface DisplaySidebarProps {
   stretchMode: 'linear' | 'asinh'
@@ -78,13 +79,20 @@ export function DisplaySidebar({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target
+      // 模态弹窗打开或焦点在表单控件（输入/选择/滑杆/富文本）上时，按键交给控件自身处理
       if (
         document.querySelector('[aria-modal="true"]') ||
         (target instanceof HTMLElement &&
           target.closest(
-            'input, select, textarea, button, [contenteditable]:not([contenteditable="false"])',
+            'input, select, textarea, [contenteditable]:not([contenteditable="false"])',
           ))
       ) {
+        return
+      }
+
+      // 焦点落在普通按钮上时：空格保留给按钮激活（键盘无障碍），仅方向键仍作为快捷键，
+      // 防止按钮残留焦点时方向键触发浏览器原生焦点移动
+      if (event.code === 'Space' && target instanceof HTMLElement && target.closest('button')) {
         return
       }
 
@@ -135,25 +143,25 @@ export function DisplaySidebar({
           <option value="asinh">ZScale · Asinh</option>
         </Select>
         <div className="mt-2 grid grid-cols-2 gap-1">
-          <Button
+          <IconButton
             variant="ghost"
-            size="sm"
+            className="w-full"
             onClick={onFitView}
-            title="居中图像并缩放到适合当前窗口"
+            label="适应窗口"
+            tooltip="居中图像并缩放到适合当前窗口"
           >
             <Maximize2 size={13} />
-            适应窗口
-          </Button>
-          <Button
+          </IconButton>
+          <IconButton
             variant={inverted ? 'tool' : 'ghost'}
-            size="sm"
+            className="w-full"
             onClick={() => onInvertedChange(!inverted)}
             aria-pressed={inverted}
-            title={inverted ? '切换为亮星暗背景' : '切换为暗星亮背景'}
+            label="反色"
+            tooltip={inverted ? '切换为亮星暗背景' : '切换为暗星亮背景'}
           >
             <Contrast size={13} />
-            反色
-          </Button>
+          </IconButton>
         </div>
       </section>
 
@@ -204,6 +212,7 @@ export function DisplaySidebar({
               variant="ghost"
               size="sm"
               onClick={() => changeFrame('previous')}
+              onMouseDown={(event) => event.preventDefault()}
               disabled={isPlaying}
               aria-label="上一帧"
               title={isPlaying ? '播放中无法切帧' : '上一帧'}
@@ -214,6 +223,7 @@ export function DisplaySidebar({
               variant="ghost"
               size="sm"
               onClick={toggleBlink}
+              onMouseDown={(event) => event.preventDefault()}
               disabled={blinkPrep != null}
               aria-label={isPlaying ? '停止闪烁' : '开始闪烁'}
               title={
@@ -238,6 +248,7 @@ export function DisplaySidebar({
               variant="ghost"
               size="sm"
               onClick={() => changeFrame('next')}
+              onMouseDown={(event) => event.preventDefault()}
               disabled={isPlaying}
               aria-label="下一帧"
               title={isPlaying ? '播放中无法切帧' : '下一帧'}

@@ -62,10 +62,10 @@ import {
   ListChecks,
   Orbit,
 } from 'lucide-react'
-import { Button } from './components/ui/button'
 import { Toolbar } from './components/ui/surface'
 import { OperationDialog } from './components/ui/operation-dialog'
 import { MessageDialog } from './components/ui/message-dialog'
+import { IconButton, TooltipProvider } from './components/ui/tooltip'
 
 function reportIdentity(designation: string): ObjectIdentity {
   return { kind: 'tracklet', value: designation }
@@ -992,248 +992,257 @@ function App() {
   }, [currentFrameIndex, manualCalibration])
 
   return (
-    <div className="relative h-screen w-screen flex flex-col bg-sky-canvas-soft-2 overflow-hidden">
-      <TitleBar settingsOpen={settingsOpen} onSettings={() => setSettingsOpen((value) => !value)} />
-
-      {/* Toolbar */}
-      <Toolbar aria-label="图像操作">
-        <Button variant="tool" size="sm" onClick={handleOpen} disabled={isLoading}>
-          <FolderOpen size={14} />
-          打开图像
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleCloseAllImages}
-          disabled={
-            frames.length === 0 ||
-            isLoading ||
-            isDetecting ||
-            isSolving ||
-            knownSearchBusy ||
-            scienceBusy
-          }
-          title={frames.length === 0 ? '当前没有可关闭的图像' : '关闭所有图像'}
-        >
-          <ImageOff size={14} />
-          关闭所有图像
-        </Button>
-
-        <div className="h-4 w-px bg-sky-hairline" aria-hidden="true" />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => handleReduction()}
-          disabled={frames.length === 0 || isDetecting || isSolving || isPlaying}
-          title={
-            isPlaying
-              ? '闪图播放中，暂停后才能归算'
-              : frames.length === 0
-                ? '请先打开 FITS 文件'
-                : '执行图像归算'
-          }
-        >
-          <Orbit size={14} />
-          归算
-        </Button>
-        <Button
-          variant={knownVisible ? 'tool' : 'ghost'}
-          size="sm"
-          onClick={handleKnownToggle}
-          disabled={knownSearchBusy || !knownPrerequisites || isPlaying}
-          title={
-            isPlaying
-              ? '闪图播放中，暂停后才能显示已知目标'
-              : !mpcorb
-                ? '请先下载 MPCORB'
-                : !knownPrerequisites
-                  ? '需要整组图片都完成 WCS 归算并具有 UTC 曝光中点'
-                  : '一次计算并显示整组图片中的已知小行星'
-          }
-        >
-          {knownVisible ? <EyeOff size={14} /> : <Eye size={14} />}{' '}
-          {knownVisible ? `隐藏已知目标 (${knownObjectCount})` : '显示已知目标'}
-        </Button>
-
-        <div className="h-4 w-px bg-sky-hairline" aria-hidden="true" />
-        <Button
-          variant="tool"
-          size="sm"
-          className={measurementMode ? 'bg-sky-control-hover text-sky-ink' : ''}
-          onClick={() => setMeasurementMode((v) => !v)}
-          disabled={!canMeasure || isPlaying}
-          aria-pressed={measurementMode}
-          title={
-            isPlaying
-              ? '闪图播放中，暂停后才能标记目标'
-              : canMeasure
-                ? measurementMode
-                  ? '等待在图像上点击一个可疑目标'
-                  : '点击后标记下一个可疑目标'
-                : '当前帧需要先通过 WCS 归算'
-          }
-        >
-          <Crosshair size={14} />
-          标记可疑目标
-        </Button>
-        <Button
-          variant="tool"
-          size="sm"
-          className={scienceOpen ? 'bg-sky-control-hover text-sky-ink' : ''}
-          onClick={() => setScienceOpen((open) => !open)}
-          disabled={measurements.length === 0}
-          aria-pressed={scienceOpen}
-          title={measurements.length === 0 ? '当前没有可疑目标' : '打开或关闭可疑目标列表'}
-        >
-          <ListChecks size={14} />
-          可疑目标列表
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={openReportDialog}
-          disabled={!appConfig || reportMeasurements.length === 0}
-          title={
-            reportMeasurements.length === 0
-              ? '至少需要一条可疑目标记录'
-              : '选择 ADES PSV 或 MPC 80-column 格式导出'
-          }
-        >
-          <FileOutput size={14} />
-          导出报告
-        </Button>
-      </Toolbar>
-
-      {error && (
-        <MessageDialog
-          tone="error"
-          title="操作未完成"
-          message={error}
-          onClose={() => setError(null)}
+    <TooltipProvider delayDuration={400}>
+      <div className="relative h-screen w-screen flex flex-col bg-sky-canvas-soft-2 overflow-hidden">
+        <TitleBar
+          settingsOpen={settingsOpen}
+          onSettings={() => setSettingsOpen((value) => !value)}
         />
-      )}
-      {!error && reductionMessage && (
-        <MessageDialog
-          tone="success"
-          title="归算完成"
-          message={reductionMessage}
-          onClose={() => setReductionMessage(null)}
-        />
-      )}
 
-      {/* Main Area */}
-      <div className="flex-1 flex min-h-0">
-        <div className="flex-1 relative">
-          <FITSViewer
-            ref={viewerRef}
-            stretchMode={stretchMode}
-            inverted={inverted}
-            manualCalibration={manualCalibration}
-            onManualOffsetChange={(x, y) => {
-              if (!manualCalibration) return
-              updateManualSeed({
-                ...manualCalibration.seed,
-                offset_x_px: x,
-                offset_y_px: y,
-              })
-            }}
-            measurementMode={measurementMode}
-            onMeasure={handleMeasure}
-            measurements={measurements}
-            knownObjects={knownVisible ? currentKnownObjects : []}
+        {/* Toolbar */}
+        <Toolbar aria-label="图像操作">
+          <IconButton
+            variant="tool"
+            onClick={handleOpen}
+            disabled={isLoading}
+            label="打开图像"
+            tooltip={isLoading ? '正在读取图像' : '打开图像'}
+          >
+            <FolderOpen size={14} />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            onClick={handleCloseAllImages}
+            disabled={
+              frames.length === 0 ||
+              isLoading ||
+              isDetecting ||
+              isSolving ||
+              knownSearchBusy ||
+              scienceBusy
+            }
+            label="关闭所有图像"
+            tooltip={frames.length === 0 ? '当前没有可关闭的图像' : '关闭所有图像'}
+          >
+            <ImageOff size={14} />
+          </IconButton>
+
+          <div className="h-4 w-px bg-sky-hairline" aria-hidden="true" />
+          <IconButton
+            variant="ghost"
+            onClick={() => handleReduction()}
+            disabled={frames.length === 0 || isDetecting || isSolving || isPlaying}
+            label="归算"
+            tooltip={
+              isPlaying
+                ? '闪图播放中，暂停后才能归算'
+                : frames.length === 0
+                  ? '请先打开 FITS 文件'
+                  : '执行图像归算'
+            }
+          >
+            <Orbit size={14} />
+          </IconButton>
+          <IconButton
+            variant={knownVisible ? 'tool' : 'ghost'}
+            onClick={handleKnownToggle}
+            disabled={knownSearchBusy || !knownPrerequisites || isPlaying}
+            aria-pressed={knownVisible}
+            label={knownVisible ? '隐藏已知目标' : '显示已知目标'}
+            tooltip={
+              isPlaying
+                ? '闪图播放中，暂停后才能显示已知目标'
+                : !mpcorb
+                  ? '请先下载 MPCORB'
+                  : !knownPrerequisites
+                    ? '需要整组图片都完成 WCS 归算并具有 UTC 曝光中点'
+                    : knownVisible
+                      ? `隐藏已知目标（${knownObjectCount} 个）`
+                      : '显示已知目标'
+            }
+          >
+            {knownVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+          </IconButton>
+
+          <div className="h-4 w-px bg-sky-hairline" aria-hidden="true" />
+          <IconButton
+            variant="tool"
+            className={measurementMode ? 'bg-sky-control-hover text-sky-ink' : ''}
+            onClick={() => setMeasurementMode((v) => !v)}
+            disabled={!canMeasure || isPlaying}
+            aria-pressed={measurementMode}
+            label="标记可疑目标"
+            tooltip={
+              isPlaying
+                ? '闪图播放中，暂停后才能标记目标'
+                : canMeasure
+                  ? measurementMode
+                    ? '等待在图像上点击一个可疑目标'
+                    : '点击后标记下一个可疑目标'
+                  : '当前帧需要先通过 WCS 归算'
+            }
+          >
+            <Crosshair size={14} />
+          </IconButton>
+          <IconButton
+            variant="tool"
+            className={scienceOpen ? 'bg-sky-control-hover text-sky-ink' : ''}
+            onClick={() => setScienceOpen((open) => !open)}
+            disabled={measurements.length === 0}
+            aria-pressed={scienceOpen}
+            label="可疑目标列表"
+            tooltip={measurements.length === 0 ? '当前没有可疑目标' : '打开或关闭可疑目标列表'}
+          >
+            <ListChecks size={14} />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            onClick={openReportDialog}
+            disabled={!appConfig || reportMeasurements.length === 0}
+            label="导出报告"
+            tooltip={
+              reportMeasurements.length === 0
+                ? '至少需要一条可疑目标记录'
+                : '选择 ADES PSV 或 MPC 80-column 格式导出'
+            }
+          >
+            <FileOutput size={14} />
+          </IconButton>
+        </Toolbar>
+
+        {error && (
+          <MessageDialog
+            tone="error"
+            title="操作未完成"
+            message={error}
+            onClose={() => setError(null)}
           />
-          {scienceOpen && (
-            <SciencePanel
+        )}
+        {!error && reductionMessage && (
+          <MessageDialog
+            tone="success"
+            title="归算完成"
+            message={reductionMessage}
+            onClose={() => setReductionMessage(null)}
+          />
+        )}
+
+        {/* Main Area */}
+        <div className="flex-1 flex min-h-0">
+          <div className="flex-1 relative">
+            <FITSViewer
+              ref={viewerRef}
+              stretchMode={stretchMode}
+              inverted={inverted}
+              manualCalibration={manualCalibration}
+              onManualOffsetChange={(x, y) => {
+                if (!manualCalibration) return
+                updateManualSeed({
+                  ...manualCalibration.seed,
+                  offset_x_px: x,
+                  offset_y_px: y,
+                })
+              }}
+              measurementMode={measurementMode}
+              onMeasure={handleMeasure}
               measurements={measurements}
-              canMatch={Boolean(mpcorb)}
-              busy={scienceBusy}
-              onClose={() => setScienceOpen(false)}
-              onMatch={handleMatch}
-              onDelete={handleDeleteMeasurement}
-              onRename={handleRenameMeasurement}
+              knownObjects={knownVisible ? currentKnownObjects : []}
+            />
+            {scienceOpen && (
+              <SciencePanel
+                measurements={measurements}
+                canMatch={Boolean(mpcorb)}
+                busy={scienceBusy}
+                onClose={() => setScienceOpen(false)}
+                onMatch={handleMatch}
+                onDelete={handleDeleteMeasurement}
+                onRename={handleRenameMeasurement}
+              />
+            )}
+          </div>
+          {frames.length > 0 && (
+            <DisplaySidebar
+              stretchMode={stretchMode}
+              onStretchModeChange={(mode) => {
+                setStretchMode(mode)
+              }}
+              inverted={inverted}
+              onInvertedChange={(nextInverted) => {
+                setInverted(nextInverted)
+              }}
+              onFitView={requestFit}
             />
           )}
         </div>
-        {frames.length > 0 && (
-          <DisplaySidebar
-            stretchMode={stretchMode}
-            onStretchModeChange={(mode) => {
-              setStretchMode(mode)
+
+        {manualCalibration && (
+          <ManualCalibrationPanel
+            calibration={manualCalibration}
+            approximateMatches={approximateManualMatches}
+            busy={manualBusy}
+            onChange={updateManualSeed}
+            onApply={handleManualRefine}
+            onClose={() => {
+              setManualCalibration(null)
+              setManualQueue([])
+              manualFrameIndex.current = null
             }}
-            inverted={inverted}
-            onInvertedChange={(nextInverted) => {
-              setInverted(nextInverted)
-            }}
-            onFitView={requestFit}
+          />
+        )}
+
+        {settingsOpen && appConfig && (
+          <SettingsDialog
+            config={appConfig}
+            mpcorb={mpcorb}
+            mpcorbBusy={scienceBusy}
+            onClose={() => setSettingsOpen(false)}
+            onSave={handleSaveConfig}
+            onUpdateMpcorb={handleMpcUpdate}
+          />
+        )}
+
+        {pendingMeasurement && (
+          <SuspiciousTargetDialog
+            measurement={pendingMeasurement}
+            pixels={framePixels[pendingMeasurement.frame_index]?.pixels}
+            width={frames[pendingMeasurement.frame_index]?.width ?? frameWidth}
+            height={frames[pendingMeasurement.frame_index]?.height ?? frameHeight}
+            busy={scienceBusy}
+            onConfirm={confirmMeasurement}
+            onCancel={cancelMeasurement}
+          />
+        )}
+
+        {reportOpen && (
+          <ReportExportDialog
+            format={reportFormat}
+            preview={reportPreview}
+            busy={reportBusy}
+            onFormatChange={setReportFormat}
+            onExport={handleReportExport}
+            onClose={() => setReportOpen(false)}
+          />
+        )}
+
+        {isLoading && (
+          <OperationDialog title="正在读取 FITS" message={loadingProgress ?? '正在读取图像信息…'} />
+        )}
+        {!isLoading && (isDetecting || isSolving) && (
+          <OperationDialog
+            title="正在归算"
+            message={
+              reductionProgress ?? (isDetecting ? '正在提取星点…' : '正在匹配星表并拟合 WCS…')
+            }
+          />
+        )}
+        {knownSearchBusy && (
+          <OperationDialog
+            title="正在解析已知目标"
+            message={`正在解析本地 MPCORB 并标识已知小行星位置…`}
           />
         )}
       </div>
-
-      {manualCalibration && (
-        <ManualCalibrationPanel
-          calibration={manualCalibration}
-          approximateMatches={approximateManualMatches}
-          busy={manualBusy}
-          onChange={updateManualSeed}
-          onApply={handleManualRefine}
-          onClose={() => {
-            setManualCalibration(null)
-            setManualQueue([])
-            manualFrameIndex.current = null
-          }}
-        />
-      )}
-
-      {settingsOpen && appConfig && (
-        <SettingsDialog
-          config={appConfig}
-          mpcorb={mpcorb}
-          mpcorbBusy={scienceBusy}
-          onClose={() => setSettingsOpen(false)}
-          onSave={handleSaveConfig}
-          onUpdateMpcorb={handleMpcUpdate}
-        />
-      )}
-
-      {pendingMeasurement && (
-        <SuspiciousTargetDialog
-          measurement={pendingMeasurement}
-          pixels={framePixels[pendingMeasurement.frame_index]?.pixels}
-          width={frames[pendingMeasurement.frame_index]?.width ?? frameWidth}
-          height={frames[pendingMeasurement.frame_index]?.height ?? frameHeight}
-          busy={scienceBusy}
-          onConfirm={confirmMeasurement}
-          onCancel={cancelMeasurement}
-        />
-      )}
-
-      {reportOpen && (
-        <ReportExportDialog
-          format={reportFormat}
-          preview={reportPreview}
-          busy={reportBusy}
-          onFormatChange={setReportFormat}
-          onExport={handleReportExport}
-          onClose={() => setReportOpen(false)}
-        />
-      )}
-
-      {isLoading && (
-        <OperationDialog title="正在读取 FITS" message={loadingProgress ?? '正在读取图像信息…'} />
-      )}
-      {!isLoading && (isDetecting || isSolving) && (
-        <OperationDialog
-          title="正在归算"
-          message={reductionProgress ?? (isDetecting ? '正在提取星点…' : '正在匹配星表并拟合 WCS…')}
-        />
-      )}
-      {knownSearchBusy && (
-        <OperationDialog
-          title="正在解析已知目标"
-          message={`正在解析本地 MPCORB 并标识已知小行星位置…`}
-        />
-      )}
-    </div>
+    </TooltipProvider>
   )
 }
 

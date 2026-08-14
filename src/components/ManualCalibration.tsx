@@ -184,6 +184,8 @@ export function GaiaCalibrationOverlay({
     canvas.width = width
     canvas.height = height
     context.clearRect(0, 0, width, height)
+    const theme = getComputedStyle(document.documentElement)
+    const ringColor = theme.getPropertyValue('--color-sky-accent-yellow').trim()
     const wcs = seedWcs(calibration.seed, width, height)
     const visibleSources = matchingCatalogSources(calibration)
     for (const source of visibleSources) {
@@ -212,7 +214,7 @@ export function GaiaCalibrationOverlay({
         ),
       )
       const radius = Math.max(3.5 + 6.5 * Math.sqrt(brightness), 4 / zoom)
-      context.strokeStyle = '#ff4f49'
+      context.strokeStyle = ringColor
       context.lineWidth = 1.5 / zoom
       context.beginPath()
       context.arc(x, y, radius, 0, Math.PI * 2)
@@ -268,12 +270,12 @@ export function ManualCalibrationPanel({
   const update = (patch: Partial<ManualCalibrationSeed>) => onChange({ ...seed, ...patch })
   const visibleSourceCount = matchingCatalogSources(calibration).length
   return (
-    <section className="absolute bottom-12 left-1/2 z-50 w-[920px] max-w-[calc(100vw-24px)] -translate-x-1/2 overflow-hidden rounded-md border border-[#ff5b58]/55 bg-sky-overlay/95 shadow-2xl backdrop-blur-md">
-      <header className="flex items-center justify-between border-b border-sky-hairline bg-[#ff5b58]/[0.07] px-4 py-2.5">
+    <section className="absolute bottom-12 left-1/2 z-50 w-[920px] max-w-[calc(100vw-24px)] -translate-x-1/2 overflow-hidden rounded-md border border-sky-hairline bg-sky-canvas-soft/95">
+      <header className="flex items-center justify-between border-b border-sky-hairline bg-sky-canvas px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <ScanSearch size={15} className="text-[#ff7773]" />
+          <ScanSearch size={15} className="text-sky-accent-yellow" />
           <span className="text-sm font-medium text-sky-ink">Gaia 人工参考星匹配</span>
-          <span className="rounded-sm border border-[#ff5b58]/35 bg-[#ff5b58]/10 px-1.5 py-0.5 font-mono text-[10px] text-[#ff8a86]">
+          <span className="rounded-sm border border-sky-accent-yellow/40 bg-sky-accent-yellow/10 px-1.5 py-0.5 font-mono text-[10px] text-sky-accent-yellow">
             {approximateMatches} 重合 · {visibleSourceCount}/{calibration.sources.length} Gaia
           </span>
         </div>
@@ -333,7 +335,7 @@ export function ManualCalibrationPanel({
             step="0.1"
             value={seed.rotation_deg}
             onChange={(event) => update({ rotation_deg: Number(event.target.value) })}
-            className="mb-2 h-1 w-full accent-[#ff5b58]"
+            className="mb-2 h-1 w-full accent-sky-accent-yellow"
           />
         </Field>
         <div className="flex gap-1">
@@ -399,7 +401,7 @@ export function ManualCalibrationPanel({
               key={step}
               type="button"
               onClick={() => setNudgeStep(step)}
-              className={`h-7 min-w-9 border-r border-sky-hairline px-2 font-mono text-[10px] last:border-r-0 ${nudgeStep === step ? 'bg-[#ff5b58]/20 text-[#ff8a86]' : 'bg-sky-canvas-soft text-sky-body hover:text-sky-ink'}`}
+              className={`h-7 min-w-9 border-r border-sky-hairline px-2 font-mono text-[10px] last:border-r-0 ${nudgeStep === step ? 'bg-sky-accent-yellow/15 text-sky-accent-yellow' : 'bg-sky-canvas-soft text-sky-body hover:text-sky-ink'}`}
             >
               {step}px
             </button>
@@ -441,7 +443,7 @@ export function ManualCalibrationPanel({
       </div>
       <footer className="flex items-center justify-between border-t border-sky-hairline bg-sky-canvas-soft px-4 py-2.5">
         <p className="text-[10px] text-sky-body">
-          红圈大小表示 Gaia G 星等的相对亮度，并非恒星真实半径；拖动或微调红圈覆盖绿色星点。
+          黄圈大小表示 Gaia G 星等的相对亮度，并非恒星真实半径；拖动或微调黄圈覆盖绿色星点。
         </p>
         <Button
           variant="primary"
