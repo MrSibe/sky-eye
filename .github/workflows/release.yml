@@ -111,6 +111,9 @@ jobs:
           generateReleaseNotes: true
           args: ${{ matrix.args }}
           retryAttempts: 2
+          # 默认 target（windows-x86_64）必须指向 NSIS 而非 MSI：初始安装为 NSIS per-user
+          # （%LOCALAPPDATA%），MSI 更新装到 Program Files 不覆盖原副本，导致重启后仍是旧版本
+          updaterJsonPreferNsis: true
 
   publish:
     name: Publish GitHub Release
