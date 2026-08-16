@@ -5,7 +5,6 @@ import { relaunch } from '@tauri-apps/plugin-process'
 import { check } from '@tauri-apps/plugin-updater'
 import {
   Database,
-  FileCode2,
   Gauge,
   Info,
   MapPinned,
@@ -22,7 +21,7 @@ import {
   type MpcorbManifest,
 } from '../lib/tauri'
 import { Button } from './ui/button'
-import { controlClassName, Field, Input, Select } from './ui/form'
+import { Field, Input, Select } from './ui/form'
 
 interface Props {
   config: AppConfig | null
@@ -33,7 +32,7 @@ interface Props {
   onUpdateMpcorb: () => Promise<void>
 }
 
-type Tab = 'station' | 'instrument' | 'reduction' | 'photometry' | 'data' | 'about' | 'json'
+type Tab = 'station' | 'instrument' | 'reduction' | 'photometry' | 'data' | 'about'
 
 const tabs: Array<{ id: Tab; label: string; icon: typeof MapPinned }> = [
   { id: 'station', label: '台站与报告', icon: MapPinned },
@@ -42,7 +41,6 @@ const tabs: Array<{ id: Tab; label: string; icon: typeof MapPinned }> = [
   { id: 'photometry', label: '光度与输出', icon: SlidersHorizontal },
   { id: 'data', label: '数据管理', icon: Database },
   { id: 'about', label: '关于', icon: Info },
-  { id: 'json', label: '高级 JSON', icon: FileCode2 },
 ]
 
 const referenceBandOptions: Array<{
@@ -134,7 +132,6 @@ export function SettingsDialog({
 }: Props) {
   const [draft, setDraft] = useState<AppConfig | null>(null)
   const [tab, setTab] = useState<Tab>('station')
-  const [jsonText, setJsonText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [appVersion, setAppVersion] = useState('读取中…')
@@ -157,7 +154,6 @@ export function SettingsDialog({
       if (!selected || Array.isArray(selected)) return
       const next = await loadAppConfigFile(selected)
       setDraft(next)
-      setJsonText(JSON.stringify(next, null, 2))
       setError(null)
     } catch (reason) {
       setError(`无法打开设置文件：${String(reason)}`)
@@ -166,15 +162,7 @@ export function SettingsDialog({
 
   const saveConfigFile = async () => {
     if (!draft) return
-    let value = draft
-    if (tab === 'json') {
-      try {
-        value = JSON.parse(jsonText) as AppConfig
-      } catch (reason) {
-        setError(`JSON 格式错误：${String(reason)}`)
-        return
-      }
-    }
+    const value = draft
     try {
       const layout = await getStorageLayout()
       const destination = await saveDialog({
@@ -247,7 +235,6 @@ export function SettingsDialog({
   useEffect(() => {
     if (!config) return
     setDraft(structuredClone(config))
-    setJsonText(JSON.stringify(config, null, 2))
   }, [config])
 
   useEffect(() => {
@@ -271,7 +258,6 @@ export function SettingsDialog({
         photometry: '将参考星表波段与报告滤镜明确分离',
         data: '本地 MPCORB 更新与覆盖层显示偏好',
         about: '版本信息、更新状态和发行渠道',
-        json: '直接查看和编辑 config/settings.json',
       })[tab],
     [tab],
   )
@@ -302,35 +288,14 @@ export function SettingsDialog({
 
   const selectTab = (next: Tab) => {
     setError(null)
-    if (next === 'json') setJsonText(JSON.stringify(draft, null, 2))
     setTab(next)
   }
 
-  const changeJson = (value: string) => {
-    setJsonText(value)
-    try {
-      const parsed = JSON.parse(value) as AppConfig
-      setDraft(parsed)
-      setError(null)
-    } catch (reason) {
-      setError(`JSON 格式错误：${String(reason)}`)
-    }
-  }
-
   const save = async () => {
-    if (tab === 'json') {
-      try {
-        setDraft(JSON.parse(jsonText) as AppConfig)
-      } catch (reason) {
-        setError(`JSON 格式错误：${String(reason)}`)
-        return
-      }
-    }
     setError(null)
     setSaving(true)
     try {
-      const value = tab === 'json' ? (JSON.parse(jsonText) as AppConfig) : draft
-      await onSave(value)
+      await onSave(draft)
       onClose()
     } catch (reason) {
       setError(String(reason))
@@ -1539,20 +1504,6 @@ export function SettingsDialog({
                     更新包必须通过 Tauri updater 签名校验；安装完成后应用会自动重新启动。
                   </p>
                 </section>
-              </div>
-            )}
-
-            {tab === 'json' && (
-              <div className="flex h-full min-h-[480px] flex-col">
-                <textarea
-                  value={jsonText}
-                  onChange={(e) => changeJson(e.target.value)}
-                  spellCheck={false}
-                  className={`${controlClassName} min-h-0 flex-1 resize-none px-4 py-3 text-caption-mono leading-5`}
-                />
-                <p className="mt-2 text-label text-sky-mute">
-                  有效 JSON 会立即同步到表单；服务端保存时还会执行范围和枚举校验。
-                </p>
               </div>
             )}
           </div>

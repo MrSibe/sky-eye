@@ -25,8 +25,8 @@
   --color-sky-selection: #1a3a5c;
   --color-sky-on-primary: #ffffff;
 
-  --font-sans: Geist, 'Segoe UI Variable', 'PingFang SC', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
+  --font-sans: 'Geist Variable', 'Segoe UI Variable', 'PingFang SC', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
 
   /* 字号刻度（docs/05-design.md 排版章节） */
   --text-label: 11px;
