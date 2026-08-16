@@ -12,7 +12,7 @@ interface FITSViewerProps {
   inverted?: boolean
   manualCalibration?: ManualCalibrationState | null
   onManualOffsetChange?: (x: number, y: number) => void
-  measurementMode?: boolean
+  measureEnabled?: boolean
   onMeasure?: (x: number, y: number) => void
   measurements?: TargetMeasurement[]
   knownObjects?: EphemerisPoint[]
@@ -115,7 +115,7 @@ export function FITSViewer({
   inverted = true,
   manualCalibration,
   onManualOffsetChange,
-  measurementMode = false,
+  measureEnabled = false,
   onMeasure,
   measurements = [],
   knownObjects = [],
@@ -339,14 +339,14 @@ export function FITSViewer({
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!measurementMode || !onMeasure || !imageWidth || !imageHeight) return
+      if (!measureEnabled || !onMeasure || !imageWidth || !imageHeight) return
       const b = e.currentTarget.getBoundingClientRect()
       onMeasure(
         ((e.clientX - b.left) * imageWidth) / b.width,
         ((e.clientY - b.top) * imageHeight) / b.height,
       )
     },
-    [imageHeight, imageWidth, measurementMode, onMeasure],
+    [imageHeight, imageWidth, measureEnabled, onMeasure],
   )
 
   return (

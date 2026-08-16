@@ -52,16 +52,7 @@ import type {
   SolveParams,
   TargetMeasurement,
 } from './lib/tauri'
-import {
-  Crosshair,
-  Eye,
-  EyeOff,
-  FileOutput,
-  FolderOpen,
-  ImageOff,
-  ListChecks,
-  Orbit,
-} from 'lucide-react'
+import { Eye, EyeOff, FileOutput, FolderOpen, ImageOff, ListChecks, Orbit } from 'lucide-react'
 import { Toolbar } from './components/ui/surface'
 import { OperationDialog } from './components/ui/operation-dialog'
 import { MessageDialog } from './components/ui/message-dialog'
@@ -130,6 +121,7 @@ function App() {
   const pixelLoadGeneration = useRef(0)
   const viewerRef = useRef<FITSViewerHandle>(null)
   const blinkGenRef = useRef(0)
+  const measureInFlight = useRef(false)
   const [loadingProgress, setLoadingProgress] = useState<string | null>(null)
   const [reductionMessage, setReductionMessage] = useState<string | null>(null)
   const [reductionProgress, setReductionProgress] = useState<string | null>(null)
@@ -138,7 +130,6 @@ function App() {
   const [manualCalibration, setManualCalibration] = useState<ManualCalibrationState | null>(null)
   const [manualBusy, setManualBusy] = useState(false)
   const [manualQueue, setManualQueue] = useState<number[]>([])
-  const [measurementMode, setMeasurementMode] = useState(false)
   const [pendingMeasurement, setPendingMeasurement] = useState<TargetMeasurement | null>(null)
   const [scienceOpen, setScienceOpen] = useState(false)
   const [scienceBusy, setScienceBusy] = useState(false)
@@ -280,9 +271,6 @@ function App() {
       })
       .catch(() => {})
   }, [appConfig])
-  useEffect(() => {
-    if (!canMeasure) setMeasurementMode(false)
-  }, [canMeasure])
   useEffect(() => {
     if (!knownPrerequisites) setKnownVisible(false)
   }, [knownPrerequisites])
@@ -459,7 +447,6 @@ function App() {
       setMeasurements([])
       setKnownObjectsByFrame({})
       setKnownVisible(false)
-      setMeasurementMode(false)
       setPendingMeasurement(null)
       setScienceOpen(false)
       setReportOpen(false)
@@ -479,13 +466,15 @@ function App() {
 
   const handleMeasure = useCallback(
     async (x: number, y: number) => {
-      setMeasurementMode(false)
+      if (measureInFlight.current) return
+      measureInFlight.current = true
       setScienceBusy(true)
       try {
         setPendingMeasurement(await measureTarget(currentFrameIndex, x, y))
       } catch (e) {
         setError(String(e))
       } finally {
+        measureInFlight.current = false
         setScienceBusy(false)
       }
     },
@@ -1067,25 +1056,6 @@ function App() {
           <div className="h-4 w-px bg-sky-hairline" aria-hidden="true" />
           <IconButton
             variant="tool"
-            className={measurementMode ? 'bg-sky-control-hover text-sky-ink' : ''}
-            onClick={() => setMeasurementMode((v) => !v)}
-            disabled={!canMeasure || isPlaying}
-            aria-pressed={measurementMode}
-            label="标记可疑目标"
-            tooltip={
-              isPlaying
-                ? '闪图播放中，暂停后才能标记目标'
-                : canMeasure
-                  ? measurementMode
-                    ? '等待在图像上点击一个可疑目标'
-                    : '点击后标记下一个可疑目标'
-                  : '当前帧需要先通过 WCS 归算'
-            }
-          >
-            <Crosshair size={14} />
-          </IconButton>
-          <IconButton
-            variant="tool"
             className={scienceOpen ? 'bg-sky-control-hover text-sky-ink' : ''}
             onClick={() => setScienceOpen((open) => !open)}
             disabled={measurements.length === 0}
@@ -1143,7 +1113,7 @@ function App() {
                   offset_y_px: y,
                 })
               }}
-              measurementMode={measurementMode}
+              measureEnabled={canMeasure && !isPlaying}
               onMeasure={handleMeasure}
               measurements={measurements}
               knownObjects={knownVisible ? currentKnownObjects : []}
