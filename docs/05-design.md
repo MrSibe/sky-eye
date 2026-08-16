@@ -7,7 +7,7 @@ description: SkyEye 桌面应用设计规范 —— 天文图像处理工具。�
 
 像 Vercel 一样设计：克制、精确、以证据说话。SkyEye 是天文工作者在夜间观测时长时间使用的桌面图像处理软件，界面必须安静、低干扰、可连续工作数小时而不疲劳。
 
-本文参考 [Vercel Design Guidelines](https://vercel.com/design.md) 的设计判断，而不是复制其报告网站外壳或 `vbg-*` 组件：保留 restraint、清晰层级、语义化 token、可访问焦点与响应式重排；不使用 Vercel 品牌标识或报告页 CSS。唯一沿用的 Vercel 视觉资产是 **Geist 字体**（Vercel 开源、为开发者界面设计，适合长时科学工作），以 `@fontsource-variable/geist` 打包进应用、完全离线加载。SkyEye 的暗色优先、纯黑图像画布、科学数据等宽排版与高密度桌面布局是最高优先级。
+本文参考 [Vercel Design Guidelines](https://vercel.com/design.md) 的设计判断，而不是复制其报告网站外壳或 `vbg-*` 组件：保留 restraint、清晰层级、语义化 token、可访问焦点与响应式重排；不使用任何 Vercel 视觉资产。字体采用 **IBM Plex 系列**（拉丁正文 `IBM Plex Sans Variable`、等宽 `IBM Plex Mono`，OFL 开源的专业字体系列）+ **Noto Sans SC**（思源黑体，中文 fallback），全部以 fontsource 打包进应用、完全离线加载。SkyEye 的暗色优先、纯黑图像画布、科学数据等宽排版与高密度桌面布局是最高优先级。
 
 ## 产品上下文
 
