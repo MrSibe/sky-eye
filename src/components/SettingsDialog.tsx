@@ -4,10 +4,7 @@ import { open, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { check } from '@tauri-apps/plugin-updater'
 import {
-  AlertTriangle,
-  CheckCircle2,
   Database,
-  Download,
   FileCode2,
   Gauge,
   Info,
@@ -99,7 +96,7 @@ function Check({
   hint?: string
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-sky-hairline bg-sky-canvas-soft px-3 py-2.5 transition-colors hover:border-sky-hairline-strong">
+    <label className="flex cursor-pointer items-start gap-2">
       <input
         type="checkbox"
         checked={checked}
@@ -107,8 +104,8 @@ function Check({
         className="mt-0.5 accent-sky-primary"
       />
       <span>
-        <span className="block text-[11px] font-medium text-sky-body">{label}</span>
-        {hint && <span className="mt-0.5 block text-[10px] leading-4 text-sky-mute">{hint}</span>}
+        <span className="block text-label text-sky-body">{label}</span>
+        {hint && <span className="mt-0.5 block text-label leading-4 text-sky-mute">{hint}</span>}
       </span>
     </label>
   )
@@ -289,14 +286,14 @@ export function SettingsDialog({
       >
         <section className="w-[360px] rounded-lg border border-sky-hairline bg-sky-canvas-soft p-5">
           <div className="flex items-center justify-between">
-            <h2 id="settings-loading-title" className="text-[13px] font-medium text-sky-ink">
+            <h2 id="settings-loading-title" className="text-body-sm font-medium text-sky-ink">
               软件设置
             </h2>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X size={15} />
             </Button>
           </div>
-          <p className="mt-3 text-[11px] text-sky-mute">
+          <p className="mt-3 text-label text-sky-mute">
             配置尚未加载。请关闭后重试；若持续出现，请检查 config/settings.json。
           </p>
         </section>
@@ -352,15 +349,10 @@ export function SettingsDialog({
       <section className="flex h-[min(760px,calc(100vh-64px))] w-[min(980px,calc(100vw-28px))] overflow-hidden rounded-lg border border-sky-hairline bg-sky-canvas-soft">
         <aside className="flex w-48 shrink-0 flex-col border-r border-sky-hairline bg-sky-canvas-soft">
           <div className="border-b border-sky-hairline px-4 py-4">
-            <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-md border border-sky-hairline bg-sky-canvas text-sky-body">
-              <SlidersHorizontal size={15} />
-            </div>
-            <h2 id="settings-title" className="text-[13px] font-semibold text-sky-ink">
+            <h2 id="settings-title" className="text-body-sm font-medium text-sky-ink">
               软件设置
             </h2>
-            <p className="mt-1 font-mono text-[9px] text-sky-mute">
-              schema v{draft.schema_version}
-            </p>
+            <p className="mt-1 text-caption-mono text-sky-mute">schema v{draft.schema_version}</p>
           </div>
           <nav className="flex-1 space-y-1 p-2" aria-label="设置分类">
             {tabs.map((item) => {
@@ -369,7 +361,7 @@ export function SettingsDialog({
                 <button
                   key={item.id}
                   onClick={() => selectTab(item.id)}
-                  className={`flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-[11px] transition-colors ${tab === item.id ? 'relative bg-sky-control-hover text-sky-ink before:absolute before:left-0 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-sky-primary' : 'text-sky-body hover:bg-sky-control-hover hover:text-sky-ink'}`}
+                  className={`flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-label transition-colors ${tab === item.id ? 'relative bg-sky-control-hover text-sky-ink before:absolute before:left-0 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-sky-primary' : 'text-sky-body hover:bg-sky-control-hover hover:text-sky-ink'}`}
                 >
                   <Icon size={14} />
                   {item.label}
@@ -377,18 +369,18 @@ export function SettingsDialog({
               )
             })}
           </nav>
-          <div className="border-t border-sky-hairline p-3 text-[9px] leading-4 text-sky-mute">
+          <div className="border-t border-sky-hairline p-3 text-label leading-4 text-sky-mute">
             保存时校验配置，并原子替换原文件。
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-[69px] shrink-0 items-center justify-between border-b border-sky-hairline px-6">
+          <header className="flex shrink-0 items-center justify-between border-b border-sky-hairline px-6 py-4">
             <div>
-              <div className="text-[13px] font-medium text-sky-ink">
+              <div className="text-body-sm font-medium text-sky-ink">
                 {tabs.find((item) => item.id === tab)?.label}
               </div>
-              <p className="mt-1 text-[10px] text-sky-mute">{activeDescription}</p>
+              <p className="mt-1 text-label text-sky-mute">{activeDescription}</p>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose} aria-label="关闭设置">
               <X size={15} />
@@ -399,7 +391,7 @@ export function SettingsDialog({
             {tab === 'station' && (
               <div className="space-y-5">
                 <section>
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     观测地点
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -499,7 +491,7 @@ export function SettingsDialog({
                   </div>
                 </section>
                 <section className="border-t border-sky-hairline pt-5">
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     署名与设备
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
@@ -601,7 +593,7 @@ export function SettingsDialog({
             {tab === 'instrument' && (
               <div className="space-y-5">
                 <section>
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     比例与方向
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -766,7 +758,7 @@ export function SettingsDialog({
                   </div>
                 </section>
                 <section className="border-t border-sky-hairline pt-5">
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     FITS 时间
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -861,7 +853,7 @@ export function SettingsDialog({
             {tab === 'reduction' && (
               <div className="space-y-5">
                 <section>
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     星点提取
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -948,7 +940,7 @@ export function SettingsDialog({
                   </div>
                 </section>
                 <section className="border-t border-sky-hairline pt-5">
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     Gaia DR3 匹配
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -1075,14 +1067,14 @@ export function SettingsDialog({
             {tab === 'photometry' && (
               <div className="space-y-5">
                 <section>
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     REFCAT2 定标
                   </h3>
-                  <div className="mb-4 rounded-md border border-sky-primary/25 bg-sky-primary/5 px-3 py-2 text-[10px] leading-4 text-sky-body">
-                    <b className="text-sky-ink">标准波段与观测滤镜分开记录。</b> ADES 的{' '}
-                    <span className="font-mono">band</span> 来自实际定标使用的 REFCAT2 波段；非
-                    Clear 滤镜另写入 <span className="font-mono">fltr</span>。
-                  </div>
+                  <p className="mb-4 text-label leading-4 text-sky-mute">
+                    <span className="font-medium text-sky-ink">标准波段与观测滤镜分开记录。</span>{' '}
+                    ADES 的 <span className="font-mono">band</span> 来自实际定标使用的 REFCAT2
+                    波段；非 Clear 滤镜另写入 <span className="font-mono">fltr</span>。
+                  </p>
                   <div className="grid grid-cols-3 gap-3">
                     <Field label="光度星表">
                       <Input value="ATLAS REFCAT2" disabled />
@@ -1272,7 +1264,7 @@ export function SettingsDialog({
                   </div>
                 </section>
                 <section className="border-t border-sky-hairline pt-5">
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     报告输出
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -1357,49 +1349,45 @@ export function SettingsDialog({
             {tab === 'data' && (
               <div className="space-y-5">
                 <section>
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     MPCORB
                   </h3>
-                  <div className="mb-3 rounded-md border border-sky-hairline-strong bg-sky-canvas-soft p-4">
-                    <div className="flex items-start justify-between gap-5">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`h-2 w-2 rounded-full ${mpcorb ? 'bg-sky-success' : 'bg-sky-mute'}`}
-                          />
-                          <span className="text-[12px] font-medium text-sky-ink">
-                            {mpcorb ? '本地轨道数据库可用' : '尚未安装本地轨道数据库'}
-                          </span>
-                        </div>
-                        {mpcorb ? (
-                          <div className="mt-2 space-y-1 font-mono text-[9px] leading-4 text-sky-mute">
-                            <div>
-                              {mpcorb.record_count.toLocaleString()} 条轨道 · 更新于{' '}
-                              {new Date(mpcorb.downloaded_unix * 1000).toLocaleString()}
-                            </div>
-                            <div className="break-all">SHA-256 {mpcorb.sha256}</div>
-                            <div>索引格式 {mpcorb.parser_version}</div>
-                          </div>
-                        ) : (
-                          <p className="mt-2 text-[10px] leading-4 text-sky-mute">
-                            下载后才能显示已知目标并匹配可疑目标 tracklet。
-                          </p>
-                        )}
+                  <div className="mb-3 flex items-start justify-between gap-5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`h-2 w-2 rounded-full ${mpcorb ? 'bg-sky-success' : 'bg-sky-mute'}`}
+                        />
+                        <span className="text-tab text-sky-ink">
+                          {mpcorb ? '本地轨道数据库可用' : '尚未安装本地轨道数据库'}
+                        </span>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => void updateMpcorbDatabase()}
-                        disabled={mpcorbBusy}
-                      >
-                        <RefreshCw size={13} className={mpcorbBusy ? 'animate-spin' : ''} />
-                        {mpcorbBusy ? '正在处理…' : mpcorb ? '立即更新' : '下载数据库'}
-                      </Button>
+                      {mpcorb ? (
+                        <div className="mt-2 space-y-1 text-caption-mono text-sky-mute">
+                          <div>
+                            {mpcorb.record_count.toLocaleString()} 条轨道 · 更新于{' '}
+                            {new Date(mpcorb.downloaded_unix * 1000).toLocaleString()}
+                          </div>
+                          <div className="break-all">SHA-256 {mpcorb.sha256}</div>
+                          <div>索引格式 {mpcorb.parser_version}</div>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-label leading-4 text-sky-mute">
+                          下载后才能显示已知目标并匹配可疑目标 tracklet。
+                        </p>
+                      )}
+                      {mpcorbError && (
+                        <p className="mt-3 text-label leading-4 text-sky-error">{mpcorbError}</p>
+                      )}
                     </div>
-                    {mpcorbError && (
-                      <p className="mt-3 border-t border-sky-hairline pt-2 text-[10px] leading-4 text-sky-error">
-                        {mpcorbError}
-                      </p>
-                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => void updateMpcorbDatabase()}
+                      disabled={mpcorbBusy}
+                    >
+                      <RefreshCw size={13} className={mpcorbBusy ? 'animate-spin' : ''} />
+                      {mpcorbBusy ? '正在处理…' : mpcorb ? '立即更新' : '下载数据库'}
+                    </Button>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <Check
@@ -1425,7 +1413,7 @@ export function SettingsDialog({
                   </div>
                 </section>
                 <section className="border-t border-sky-hairline pt-5">
-                  <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                  <h3 className="mb-3 text-label uppercase tracking-[0.12em] text-sky-mute">
                     已知目标覆盖层
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -1478,7 +1466,7 @@ export function SettingsDialog({
                       />
                     </Field>
                   </div>
-                  <p className="mt-3 text-[10px] leading-4 text-sky-mute">
+                  <p className="mt-3 text-label leading-4 text-sky-mute">
                     星等限制只影响覆盖层显示，不参与本地匹配候选的硬过滤。
                   </p>
                 </section>
@@ -1487,34 +1475,23 @@ export function SettingsDialog({
 
             {tab === 'about' && (
               <div className="space-y-5">
-                <section className="overflow-hidden rounded-lg border border-sky-hairline-strong bg-sky-canvas-soft">
-                  <div className="relative px-5 py-6">
-                    <div className="relative flex items-start gap-4">
-                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-sky-hairline-strong bg-sky-canvas font-mono text-[15px] font-semibold tracking-[0.14em] text-sky-body">
-                        SE
-                      </div>
-                      <div>
-                        <h3 className="text-[18px] font-semibold tracking-tight text-sky-ink">
-                          Sky Eye
-                        </h3>
-                        <p className="mt-1 text-[10px] leading-4 text-sky-mute">
-                          面向小行星搜索、测量与 MPC 报告的桌面图像处理工具
-                        </p>
-                        <div className="mt-3 inline-flex rounded border border-sky-hairline-strong bg-sky-canvas px-2 py-1 font-mono text-[10px] text-sky-body">
-                          version {appVersion}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <section>
+                  <h3 className="text-body-lg font-semibold tracking-tight text-sky-ink">
+                    Sky Eye
+                  </h3>
+                  <p className="mt-1 text-label text-sky-mute">
+                    面向小行星搜索、测量与 MPC 报告的桌面图像处理工具
+                  </p>
+                  <p className="mt-1 text-caption-mono text-sky-mute">version {appVersion}</p>
                 </section>
 
                 <section>
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-primary">
+                      <h3 className="text-label uppercase tracking-[0.12em] text-sky-mute">
                         软件更新
                       </h3>
-                      <p className="mt-1 text-[9px] text-sky-mute">打开本页时自动检查发行版</p>
+                      <p className="mt-1 text-label text-sky-mute">打开本页时自动检查发行版</p>
                     </div>
                     <Button
                       variant="ghost"
@@ -1529,51 +1506,36 @@ export function SettingsDialog({
                       重新检查
                     </Button>
                   </div>
-                  <div className="rounded-md border border-sky-hairline-strong bg-sky-canvas p-4">
-                    <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
                       <div
-                        className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border ${
-                          updateStatus === 'error'
-                            ? 'border-sky-error/40 bg-sky-error/10 text-sky-error'
-                            : updateStatus === 'available'
-                              ? 'border-sky-primary/40 bg-sky-primary/10 text-sky-primary'
-                              : 'border-sky-hairline-strong bg-sky-canvas-soft text-sky-success'
-                        }`}
+                        className={`text-body-sm ${updateStatus === 'error' ? 'text-sky-error' : 'text-sky-body'}`}
                       >
-                        {updateStatus === 'error' ? (
-                          <AlertTriangle size={13} />
-                        ) : updateStatus === 'available' || updateStatus === 'installing' ? (
-                          <Download size={13} />
-                        ) : (
-                          <CheckCircle2 size={13} />
-                        )}
+                        {updateMessage}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[11px] leading-5 text-sky-body">{updateMessage}</div>
-                        {availableUpdate?.body && (
-                          <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap border-t border-sky-hairline pt-2 text-[9px] leading-4 text-sky-mute">
-                            {availableUpdate.body}
-                          </div>
-                        )}
-                        {updateStatus === 'installing' && (
-                          <div className="mt-3 h-1 overflow-hidden rounded-full bg-sky-hairline">
-                            <div
-                              className={`h-full bg-sky-primary transition-[width] ${updateProgress == null ? 'w-1/3 animate-pulse' : ''}`}
-                              style={
-                                updateProgress == null ? undefined : { width: `${updateProgress}%` }
-                              }
-                            />
-                          </div>
-                        )}
-                      </div>
-                      {updateStatus === 'available' && (
-                        <Button size="sm" onClick={() => void installSoftwareUpdate()}>
-                          下载并安装
-                        </Button>
+                      {availableUpdate?.body && (
+                        <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap text-label leading-4 text-sky-mute">
+                          {availableUpdate.body}
+                        </div>
+                      )}
+                      {updateStatus === 'installing' && (
+                        <div className="mt-3 h-1 overflow-hidden rounded-full bg-sky-hairline">
+                          <div
+                            className={`h-full bg-sky-primary transition-[width] ${updateProgress == null ? 'w-1/3 animate-pulse' : ''}`}
+                            style={
+                              updateProgress == null ? undefined : { width: `${updateProgress}%` }
+                            }
+                          />
+                        </div>
                       )}
                     </div>
+                    {updateStatus === 'available' && (
+                      <Button size="sm" onClick={() => void installSoftwareUpdate()}>
+                        下载并安装
+                      </Button>
+                    )}
                   </div>
-                  <p className="mt-2 text-[9px] leading-4 text-sky-mute">
+                  <p className="mt-2 text-label leading-4 text-sky-mute">
                     更新包必须通过 Tauri updater 签名校验；安装完成后应用会自动重新启动。
                   </p>
                 </section>
@@ -1586,9 +1548,9 @@ export function SettingsDialog({
                   value={jsonText}
                   onChange={(e) => changeJson(e.target.value)}
                   spellCheck={false}
-                  className={`${controlClassName} min-h-0 flex-1 resize-none px-4 py-3 font-mono text-[11px] leading-5`}
+                  className={`${controlClassName} min-h-0 flex-1 resize-none px-4 py-3 text-caption-mono leading-5`}
                 />
-                <p className="mt-2 text-[9px] text-sky-mute">
+                <p className="mt-2 text-label text-sky-mute">
                   有效 JSON 会立即同步到表单；服务端保存时还会执行范围和枚举校验。
                 </p>
               </div>
@@ -1596,10 +1558,10 @@ export function SettingsDialog({
           </div>
 
           <footer className="shrink-0 border-t border-sky-hairline bg-sky-canvas-soft px-6 py-3">
-            {error && <p className="mb-2 text-[10px] leading-4 text-sky-error">{error}</p>}
+            {error && <p className="mb-2 text-label leading-4 text-sky-error">{error}</p>}
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[9px] text-sky-mute">config/settings.json</span>
+                <span className="text-caption-mono text-sky-mute">config/settings.json</span>
                 <Button variant="ghost" size="sm" onClick={openConfigFile} disabled={saving}>
                   打开 JSON
                 </Button>

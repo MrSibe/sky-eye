@@ -28,10 +28,10 @@ export function ReportExportDialog({
       <section className="flex h-[min(620px,calc(100vh-68px))] w-[min(760px,calc(100vw-32px))] flex-col overflow-hidden rounded-lg border border-sky-hairline bg-sky-canvas-soft">
         <header className="flex shrink-0 items-center justify-between border-b border-sky-hairline px-5 py-3">
           <div>
-            <h2 id="report-export-title" className="text-[13px] font-medium text-sky-ink">
+            <h2 id="report-export-title" className="text-body-sm font-medium text-sky-ink">
               导出观测报告
             </h2>
-            <p className="mt-0.5 text-[9px] text-sky-mute">
+            <p className="mt-0.5 text-label text-sky-mute">
               同一组可疑目标，可在导出时选择报告格式
             </p>
           </div>
@@ -56,17 +56,17 @@ export function ReportExportDialog({
           >
             MPC 80-column
           </Button>
-          <span className="ml-auto font-mono text-[9px] text-sky-mute">
+          <span className="ml-auto text-caption-mono text-sky-mute">
             {format === 'ades2022_psv' ? '.psv' : '.txt'}
           </span>
         </div>
         <div className="min-h-0 flex-1 p-4">
-          <pre className="h-full overflow-auto rounded-md border border-sky-hairline-strong bg-sky-canvas px-4 py-3 font-mono text-[10px] leading-5 text-sky-body">
+          <pre className="h-full overflow-auto rounded-md border border-sky-hairline-strong bg-sky-canvas px-4 py-3 text-caption-mono leading-5 text-sky-body">
             {preview || (busy ? '正在生成预览…' : '当前测量无法生成预览。')}
           </pre>
         </div>
         <footer className="flex shrink-0 justify-end gap-2 border-t border-sky-hairline px-5 py-3">
-          <span className="mr-auto self-center text-[9px] text-sky-mute">
+          <span className="mr-auto self-center text-label text-sky-mute">
             打开窗口或切换格式时自动校验并刷新
           </span>
           <Button variant="primary" size="sm" onClick={onExport} disabled={busy}>

@@ -15,7 +15,7 @@ export function TitleBar({ settingsOpen = false, onSettings }: TitleBarProps) {
       data-tauri-drag-region
       className="relative z-[200] h-9 flex shrink-0 items-center select-none border-b border-sky-hairline bg-sky-canvas-soft"
     >
-      <span data-tauri-drag-region className="text-sky-ink font-semibold text-sm px-4">
+      <span data-tauri-drag-region className="text-sky-ink font-semibold text-body-sm px-4">
         SkyEye
       </span>
 
@@ -63,7 +63,7 @@ export function TitleBar({ settingsOpen = false, onSettings }: TitleBarProps) {
           onClick={() => appWindow?.close()}
           onMouseDown={(event) => event.preventDefault()}
           disabled={!appWindow}
-          className="h-9 w-10 rounded-none hover:bg-sky-error hover:text-white"
+          className="h-9 w-10 rounded-none hover:bg-sky-error hover:text-sky-on-primary"
           aria-label="关闭"
           title="关闭"
         >

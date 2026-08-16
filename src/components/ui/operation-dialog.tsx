@@ -21,13 +21,10 @@ export function OperationDialog({ title, message }: OperationDialogProps) {
           className="shrink-0 animate-spin text-sky-primary"
         />
         <div className="min-w-0 flex-1">
-          <h2 id="operation-dialog-title" className="text-[13px] font-medium text-sky-ink">
+          <h2 id="operation-dialog-title" className="text-body-sm font-medium text-sky-ink">
             {title}
           </h2>
-          <p
-            id="operation-dialog-message"
-            className="mt-1 truncate text-[11px] leading-4 text-sky-body"
-          >
+          <p id="operation-dialog-message" className="mt-1 truncate text-label text-sky-body">
             {message}
           </p>
           <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-sky-hairline-strong">

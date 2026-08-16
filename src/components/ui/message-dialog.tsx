@@ -33,10 +33,10 @@ export function MessageDialog({ tone, title, message, onClose }: MessageDialogPr
             }
           />
           <div className="min-w-0 flex-1">
-            <h2 id="message-dialog-title" className="text-[13px] font-medium text-sky-ink">
+            <h2 id="message-dialog-title" className="text-body-sm font-medium text-sky-ink">
               {title}
             </h2>
-            <p id="message-dialog-message" className="mt-1 text-[11px] leading-5 text-sky-body">
+            <p id="message-dialog-message" className="mt-1 text-label leading-5 text-sky-body">
               {message}
             </p>
           </div>

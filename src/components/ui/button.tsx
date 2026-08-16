@@ -7,17 +7,17 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-sky-primary text-white hover:bg-sky-primary-hover',
+        primary: 'bg-sky-primary text-sky-on-primary hover:bg-sky-primary-hover',
         secondary:
           'bg-sky-control text-sky-ink border border-sky-hairline-strong hover:bg-sky-control-hover',
         ghost: 'text-sky-body hover:text-sky-ink hover:bg-sky-control-hover',
         tool: 'text-sky-body hover:text-sky-ink hover:bg-sky-control-hover',
-        active: 'bg-sky-primary text-white',
+        active: 'bg-sky-primary text-sky-on-primary',
       },
       size: {
-        sm: 'h-7 px-2 text-xs',
-        md: 'h-8 px-3 text-[13px]',
-        lg: 'h-10 px-4',
+        sm: 'h-7 px-2 text-button',
+        md: 'h-8 px-3 text-button',
+        lg: 'h-10 px-4 text-button',
         icon: 'h-7 w-7',
       },
     },

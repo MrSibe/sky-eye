@@ -404,7 +404,7 @@ export function FITSViewer({
                     cy={m.y}
                     r={Math.max(4 / zoom, m.aperture_radius_px)}
                     fill="none"
-                    stroke="#fb7185"
+                    stroke="var(--color-sky-primary)"
                     strokeWidth={1.5 / zoom}
                   />
                 </g>
@@ -419,14 +419,22 @@ export function FITSViewer({
                       cy={p.y}
                       r={10 / zoom}
                       fill="none"
-                      stroke={o.quality !== 'degraded_time' ? '#22d3ee' : '#f59e0b'}
+                      stroke={
+                        o.quality !== 'degraded_time'
+                          ? 'var(--color-sky-accent-green)'
+                          : 'var(--color-sky-accent-yellow)'
+                      }
                       strokeWidth={1.4 / zoom}
                     />
                     <text
                       x={p.x + 12 / zoom}
                       y={p.y - 8 / zoom}
                       fontSize={11 / zoom}
-                      fill={o.quality !== 'degraded_time' ? '#22d3ee' : '#f59e0b'}
+                      fill={
+                        o.quality !== 'degraded_time'
+                          ? 'var(--color-sky-accent-green)'
+                          : 'var(--color-sky-accent-yellow)'
+                      }
                     >
                       {o.designation}
                     </text>
@@ -439,12 +447,12 @@ export function FITSViewer({
       {!hasImage && (
         <div className="absolute inset-0 flex items-center justify-center text-sky-mute select-none">
           <div className="text-center">
-            <p className="text-lg mb-2">打开 FITS 文件开始</p>
+            <p className="text-body-lg mb-2">打开 FITS 文件开始</p>
           </div>
         </div>
       )}
       {hasImage && cursorMeasurement && (
-        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded bg-sky-canvas/85 px-2 py-1 font-mono text-[10px] leading-4 text-sky-body backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded bg-sky-canvas/85 px-2 py-1 text-caption-mono text-sky-body backdrop-blur-sm">
           <span>X {cursorMeasurement.x.toFixed(1)}</span>
           <span>Y {cursorMeasurement.y.toFixed(1)}</span>
           <span>

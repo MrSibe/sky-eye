@@ -123,13 +123,13 @@ export function DisplaySidebar({
   return (
     <Panel
       className="w-60 shrink-0 border-l border-sky-hairline"
-      title={<span className="text-[11px] tracking-wide">显示</span>}
+      title={<span className="text-label tracking-wide">显示</span>}
       aria-label="显示与帧控制"
     >
       <section className="border-b border-sky-hairline px-3 py-3">
         <label
           htmlFor="display-stretch"
-          className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.12em] text-sky-mute"
+          className="mb-1.5 block text-label uppercase tracking-[0.12em] text-sky-mute"
         >
           图像拉伸
         </label>
@@ -137,7 +137,7 @@ export function DisplaySidebar({
           id="display-stretch"
           value={stretchMode}
           onChange={(event) => onStretchModeChange(event.target.value as 'linear' | 'asinh')}
-          className="h-7 text-[11px]"
+          className="h-7 text-label"
         >
           <option value="linear">ZScale · 线性</option>
           <option value="asinh">ZScale · Asinh</option>
@@ -167,10 +167,8 @@ export function DisplaySidebar({
 
       <section className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-8 shrink-0 items-center justify-between border-b border-sky-hairline px-3">
-          <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-sky-mute">
-            FITS 列表
-          </span>
-          <span className="font-mono text-[10px] text-sky-mute">{frames.length}</span>
+          <span className="text-label uppercase tracking-[0.12em] text-sky-mute">FITS 列表</span>
+          <span className="text-caption-mono text-sky-mute">{frames.length}</span>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {frames.map((frame, index) => (
@@ -178,14 +176,14 @@ export function DisplaySidebar({
               key={frame.path || index}
               onClick={() => selectFrame(index)}
               aria-current={index === currentFrameIndex ? 'true' : undefined}
-              className={`w-full border-b border-sky-hairline px-3 py-2 text-left text-[11px] leading-4 transition-colors ${
+              className={`w-full border-b border-sky-hairline px-3 py-2 text-left text-label transition-colors ${
                 index === currentFrameIndex
                   ? 'bg-sky-selection text-sky-ink'
                   : 'text-sky-body hover:bg-sky-control-hover hover:text-sky-ink'
               }`}
             >
               <div className="truncate font-normal text-sky-ink/90">{frame.label}</div>
-              <div className="mt-0.5 flex items-center justify-between font-mono text-[10px] leading-3.5 text-sky-mute">
+              <div className="mt-0.5 flex items-center justify-between text-caption-mono text-sky-mute">
                 <span>
                   {frame.width}×{frame.height}
                 </span>
@@ -199,10 +197,8 @@ export function DisplaySidebar({
       {frames.length >= 2 && (
         <section className="shrink-0 border-t border-sky-hairline px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-sky-mute">
-              闪烁控制
-            </span>
-            <span className="font-mono text-[10px] text-sky-body">
+            <span className="text-label uppercase tracking-[0.12em] text-sky-mute">闪烁控制</span>
+            <span className="text-caption-mono text-sky-body">
               {currentFrameIndex + 1}/{frames.length}
             </span>
           </div>
@@ -235,7 +231,7 @@ export function DisplaySidebar({
               }
             >
               {blinkPrep != null ? (
-                <span className="font-mono text-[10px]">
+                <span className="text-caption-mono">
                   {blinkPrep.loaded}/{blinkPrep.total}
                 </span>
               ) : isPlaying ? (
@@ -271,12 +267,10 @@ export function DisplaySidebar({
               onChange={changeSpeed}
               className="h-1 w-full accent-sky-primary"
             />
-            <span className="w-12 text-right font-mono text-[10px] text-sky-mute">
-              {speedMs} ms
-            </span>
+            <span className="w-12 text-right text-caption-mono text-sky-mute">{speedMs} ms</span>
           </div>
 
-          <div className="mt-3 border-t border-sky-hairline pt-2 font-mono text-[9px] leading-4 text-sky-mute">
+          <div className="mt-3 border-t border-sky-hairline pt-2 text-caption-mono text-sky-mute">
             <div className="flex items-center justify-between">
               <span>
                 <kbd className="text-sky-body">Space</kbd> 播放 / 暂停

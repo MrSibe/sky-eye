@@ -274,8 +274,8 @@ export function ManualCalibrationPanel({
       <header className="flex items-center justify-between border-b border-sky-hairline bg-sky-canvas px-4 py-2.5">
         <div className="flex items-center gap-2">
           <ScanSearch size={15} className="text-sky-accent-yellow" />
-          <span className="text-sm font-medium text-sky-ink">Gaia 人工参考星匹配</span>
-          <span className="rounded-sm border border-sky-accent-yellow/40 bg-sky-accent-yellow/10 px-1.5 py-0.5 font-mono text-[10px] text-sky-accent-yellow">
+          <span className="text-body-sm font-medium text-sky-ink">Gaia 人工参考星匹配</span>
+          <span className="rounded-sm border border-sky-accent-yellow/40 bg-sky-accent-yellow/10 px-1.5 py-0.5 text-caption-mono text-sky-accent-yellow">
             {approximateMatches} 重合 · {visibleSourceCount}/{calibration.sources.length} Gaia
           </span>
         </div>
@@ -358,7 +358,7 @@ export function ManualCalibrationPanel({
         </div>
       </div>
       <div className="flex items-center gap-2 border-t border-sky-hairline/70 px-4 py-2">
-        <span className="text-[10px] uppercase tracking-[0.14em] text-sky-mute">位置微调</span>
+        <span className="text-label uppercase tracking-[0.14em] text-sky-mute">位置微调</span>
         <div className="grid grid-cols-3 grid-rows-2 gap-1">
           <span />
           <Button
@@ -401,13 +401,13 @@ export function ManualCalibrationPanel({
               key={step}
               type="button"
               onClick={() => setNudgeStep(step)}
-              className={`h-7 min-w-9 border-r border-sky-hairline px-2 font-mono text-[10px] last:border-r-0 ${nudgeStep === step ? 'bg-sky-accent-yellow/15 text-sky-accent-yellow' : 'bg-sky-canvas-soft text-sky-body hover:text-sky-ink'}`}
+              className={`h-7 min-w-9 border-r border-sky-hairline px-2 text-caption-mono last:border-r-0 ${nudgeStep === step ? 'bg-sky-accent-yellow/15 text-sky-accent-yellow' : 'bg-sky-canvas-soft text-sky-body hover:text-sky-ink'}`}
             >
               {step}px
             </button>
           ))}
         </div>
-        <span className="font-mono text-[10px] text-sky-body">
+        <span className="text-caption-mono text-sky-body">
           Δx {seed.offset_x_px.toFixed(1)} · Δy {seed.offset_y_px.toFixed(1)}
         </span>
         <div className="ml-auto flex items-center gap-1">
@@ -442,7 +442,7 @@ export function ManualCalibrationPanel({
         </div>
       </div>
       <footer className="flex items-center justify-between border-t border-sky-hairline bg-sky-canvas-soft px-4 py-2.5">
-        <p className="text-[10px] text-sky-body">
+        <p className="text-label text-sky-body">
           黄圈大小表示 Gaia G 星等的相对亮度，并非恒星真实半径；拖动或微调黄圈覆盖绿色星点。
         </p>
         <Button

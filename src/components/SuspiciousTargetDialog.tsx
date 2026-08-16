@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { Crosshair, ScanSearch } from 'lucide-react'
 import type { TargetMeasurement } from '../lib/tauri'
 import { validateTrackletDesignation } from '../lib/mpcDesignation'
 import { Button } from './ui/button'
@@ -79,7 +78,7 @@ function TargetCutout({
           width: `${Math.min(50, Math.max(6, (measurement.aperture_radius_px / 32) * 100))}%`,
         }}
       />
-      <span className="absolute bottom-2 left-2 rounded bg-black/65 px-1.5 py-1 font-mono text-[9px] text-white/75">
+      <span className="absolute bottom-2 left-2 rounded bg-black/65 px-1.5 py-1 text-caption-mono text-sky-body">
         64 × 64 px
       </span>
     </div>
@@ -89,8 +88,8 @@ function TargetCutout({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-sky-hairline py-1.5 last:border-0">
-      <span className="text-[9px] uppercase tracking-[0.12em] text-sky-mute">{label}</span>
-      <span className="font-mono text-[11px] text-sky-ink">{value}</span>
+      <span className="text-label uppercase tracking-[0.12em] text-sky-mute">{label}</span>
+      <span className="text-caption-mono text-sky-ink">{value}</span>
     </div>
   )
 }
@@ -124,15 +123,12 @@ export function SuspiciousTargetDialog({
       aria-labelledby="suspicious-target-title"
     >
       <section className="max-h-[calc(100vh-64px)] w-[min(720px,calc(100vw-32px))] overflow-y-auto rounded-lg border border-sky-hairline bg-sky-canvas-soft">
-        <header className="flex items-center gap-3 border-b border-sky-hairline px-5 py-3.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-sky-hairline bg-sky-canvas text-sky-body">
-            <ScanSearch size={17} />
-          </div>
+        <header className="flex items-center border-b border-sky-hairline px-5 py-3.5">
           <div>
-            <h2 id="suspicious-target-title" className="text-[13px] font-medium text-sky-ink">
+            <h2 id="suspicious-target-title" className="text-body-sm font-medium text-sky-ink">
               可疑目标确认
             </h2>
-            <p className="mt-0.5 text-[9px] text-sky-mute">
+            <p className="mt-0.5 text-label text-sky-mute">
               第 {measurement.frame_index + 1} 帧 · 检查定位和测量质量，命名后直接加入队列
             </p>
           </div>
@@ -141,9 +137,8 @@ export function SuspiciousTargetDialog({
         <div className="grid gap-4 p-5 md:grid-cols-[minmax(0,1.15fr)_minmax(240px,.85fr)]">
           <TargetCutout measurement={measurement} pixels={pixels} width={width} height={height} />
           <div className="flex min-w-0 flex-col gap-3">
-            <section className="rounded-md border border-sky-hairline bg-sky-canvas px-3 py-2">
-              <div className="mb-1 flex items-center gap-2 border-b border-sky-hairline pb-2 text-[10px] font-medium text-sky-body">
-                <Crosshair size={12} className="text-sky-body" />
+            <section className="flex min-w-0 flex-col">
+              <div className="mb-1 flex items-center border-b border-sky-hairline pb-2 text-label text-sky-body">
                 测量结果
               </div>
               <Metric
@@ -158,7 +153,7 @@ export function SuspiciousTargetDialog({
               />
               <Metric label="Ellipticity" value={measurement.ellipticity?.toFixed(3) ?? '—'} />
             </section>
-            <section className="rounded-md border border-sky-hairline bg-sky-canvas px-3 py-2">
+            <section className="flex min-w-0 flex-col">
               <Metric label="RA" value={measurement.ra_deg?.toFixed(7) ?? '不可用'} />
               <Metric label="Dec" value={measurement.dec_deg?.toFixed(7) ?? '不可用'} />
               <Metric
@@ -167,7 +162,7 @@ export function SuspiciousTargetDialog({
               />
             </section>
             {measurement.flags.length > 0 && (
-              <div className="rounded-md border border-sky-accent-yellow/30 bg-sky-accent-yellow/5 px-3 py-2 text-[9px] leading-4 text-sky-accent-yellow">
+              <div className="text-label leading-4 text-sky-accent-yellow">
                 质量标志：{measurement.flags.join(', ')}
               </div>
             )}
@@ -177,7 +172,7 @@ export function SuspiciousTargetDialog({
         <div className="border-t border-sky-hairline px-5 py-4">
           <label
             htmlFor="suspicious-target-designation"
-            className="mb-1.5 block text-[10px] font-medium text-sky-body"
+            className="mb-1.5 block text-label text-sky-body"
           >
             观测者临时名称 / trkSub
           </label>
@@ -196,11 +191,11 @@ export function SuspiciousTargetDialog({
             aria-invalid={Boolean(error)}
             aria-describedby="suspicious-target-help"
             placeholder="例如 SKY001"
-            className={`h-10 w-full rounded-md border bg-sky-canvas px-3 font-mono text-[13px] tracking-[0.08em] text-sky-ink outline-none transition-colors placeholder:tracking-normal placeholder:text-sky-mute ${error ? 'border-sky-error focus:border-sky-error' : 'border-sky-hairline-strong focus:border-sky-accent-yellow'}`}
+            className={`h-8 w-full rounded-sm border bg-sky-canvas px-2 text-code tracking-[0.08em] text-sky-ink outline-none transition-colors placeholder:tracking-normal placeholder:text-sky-mute ${error ? 'border-sky-error focus:border-sky-error' : 'border-sky-hairline-strong focus:border-sky-primary'}`}
           />
           <div
             id="suspicious-target-help"
-            className={`mt-2 min-h-4 text-[9px] leading-4 ${error ? 'text-sky-error' : 'text-sky-mute'}`}
+            className={`mt-2 min-h-4 text-label leading-4 ${error ? 'text-sky-error' : 'text-sky-mute'}`}
           >
             {error ??
               '1–7 个 ASCII 字母或数字；不同目标使用不同名称，同一目标的多帧观测使用相同名称。'}

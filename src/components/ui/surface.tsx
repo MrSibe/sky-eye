@@ -23,7 +23,7 @@ export function Panel({ title, actions, className, children, ...props }: PanelPr
     <section className={cn('flex min-h-0 flex-col bg-sky-canvas', className)} {...props}>
       {(title || actions) && (
         <header className="flex min-h-8 items-center justify-between gap-3 border-b border-sky-hairline bg-sky-canvas-soft px-3 py-2">
-          <div className="min-w-0 text-xs font-medium text-sky-body">{title}</div>
+          <div className="min-w-0 text-label text-sky-body">{title}</div>
           {actions}
         </header>
       )}

@@ -1,475 +1,62 @@
 ---
-version: alpha
-name: SkyEye Design System
-website: ''
-description: SkyEye 的设计语言 — 一款面向天文工作者的桌面图像处理软件。以暗色为默认底色，低对比度界面确保长时间观测操作时不刺眼。借鉴 Vercel 的克制和品质感：单色 primary、清晰的信息层级、精确的间距系统。
-
-seo:
-  title: 'SkyEye Design System — Dark-first astronomical image processing app'
-  metaDescription: 'SkyEye design language as a DESIGN.md file. Dark-first, Geist + Geist Mono, astronomy-optimized UI.'
-  highlights:
-    - "Dark-first — default bg #0a0a0a, ink-like interface that doesn't interfere with FITS image viewing"
-    - 'Single accent #0070f3 — used for measurement overlays, selected targets, active annotations'
-    - 'Geist + Geist Mono — clean sans for UI, mono for RA/Dec coordinates and technical data'
-    - 'Adaptive canvas — FITSViewer is always pure black (#000000), panels use stepped grays'
-    - 'Scientific precision — monospace tables, consistent decimal alignment, show-all-the-digits'
-  tags:
-    - 'Scientific Desktop'
-    - 'Astronomy'
-    - 'Image Processing'
-  lastUpdated: '2026-07-13'
-
-colors:
-  primary: '#0070f3'
-  on-primary: '#ffffff'
-  ink: '#ededed'
-  body: '#a1a1a1'
-  mute: '#666666'
-  hairline: '#2a2a2a'
-  hairline-strong: '#404040'
-  canvas: '#111111'
-  canvas-soft: '#0d0d0d'
-  canvas-soft-2: '#0a0a0a'
-  canvas-viewer: '#000000'
-  accent-green: '#38d9a9'
-  accent-green-soft: '#0a2e22'
-  accent-yellow: '#ffd43b'
-  accent-yellow-soft: '#332b00'
-  accent-red: '#ff6b6b'
-  accent-red-soft: '#331111'
-  link: '#74c0fc'
-  link-deep: '#4dabf7'
-  success: '#38d9a9'
-  error: '#ff6b6b'
-  error-soft: '#331111'
-  warning: '#ffd43b'
-  warning-soft: '#332b00'
-  selection-bg: '#1a3a5c'
-  selection-fg: '#ededed'
-
-typography:
-  display-xl:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 48px
-    fontWeight: 600
-    lineHeight: 48px
-    letterSpacing: -2.4px
-  display-lg:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 32px
-    fontWeight: 600
-    lineHeight: 40px
-    letterSpacing: -1.28px
-  display-md:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 24px
-    fontWeight: 600
-    lineHeight: 32px
-    letterSpacing: -0.96px
-  display-sm:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 20px
-    fontWeight: 600
-    lineHeight: 28px
-    letterSpacing: -0.6px
-  body-lg:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 18px
-    fontWeight: 400
-    lineHeight: 28px
-    letterSpacing: 0px
-  body-md:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 15px
-    fontWeight: 400
-    lineHeight: 22px
-  body-md-strong:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 15px
-    fontWeight: 500
-    lineHeight: 22px
-  body-sm:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 13px
-    fontWeight: 400
-    lineHeight: 18px
-  body-sm-strong:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 13px
-    fontWeight: 500
-    lineHeight: 18px
-  caption:
-    fontFamily: Geist Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace
-    fontSize: 12px
-    fontWeight: 400
-    lineHeight: 16px
-  caption-mono:
-    fontFamily: Geist Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace
-    fontSize: 11px
-    fontWeight: 400
-    lineHeight: 14px
-    letterSpacing: 0.5px
-  code:
-    fontFamily: Geist Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace
-    fontSize: 13px
-    fontWeight: 400
-    lineHeight: 20px
-  coord:
-    fontFamily: Geist Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace
-    fontSize: 14px
-    fontWeight: 500
-    lineHeight: 20px
-    letterSpacing: 0.5px
-  button-md:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 13px
-    fontWeight: 500
-    lineHeight: 18px
-  button-lg:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 15px
-    fontWeight: 500
-    lineHeight: 22px
-  tab-label:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 12px
-    fontWeight: 500
-    lineHeight: 16px
-    letterSpacing: 0.3px
-  label:
-    fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
-    fontSize: 11px
-    fontWeight: 500
-    lineHeight: 14px
-    letterSpacing: 0.5px
-
-rounded:
-  none: 0px
-  xs: 2px
-  sm: 4px
-  md: 6px
-  lg: 8px
-  xl: 12px
-  pill: 9999px
-
-spacing:
-  xxs: 2px
-  xs: 4px
-  sm: 8px
-  md: 12px
-  lg: 16px
-  xl: 20px
-  2xl: 24px
-  3xl: 32px
-  4xl: 40px
-  5xl: 48px
-  6xl: 64px
-
-components:
-  fits-viewer:
-    backgroundColor: '{colors.canvas-viewer}'
-    rounded: '{rounded.none}'
-    border: 'none'
-    description: 'WebGL2 FITS image display using a single-channel float texture and fragment-shader stretch. Always pitch-black background. User controls: zoom, pan, stretch mode selector in a floating toolbar.'
-
-  fits-toolbar:
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.body}'
-    typography: '{typography.body-sm}'
-    rounded: '{rounded.md}'
-    padding: '{spacing.xs} {spacing.sm}'
-    borderColor: '{colors.hairline}'
-    description: 'Floating overlay toolbar on top of FITSViewer. Buttons: zoom in/out, fit, stretch mode, invert, reset view.'
-
-  panel:
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.ink}'
-    typography: '{typography.body-sm}'
-    rounded: '{rounded.none}'
-    padding: '{spacing.md}'
-    borderColor: '{colors.hairline}'
-    description: 'Side panel / docked panel container for configuration and results.'
-
-  panel-header:
-    backgroundColor: '{colors.canvas-soft}'
-    textColor: '{colors.body}'
-    typography: '{typography.label}'
-    padding: '{spacing.sm} {spacing.md}'
-    borderColor: '{colors.hairline}'
-    description: 'Panel title bar. Shows section name, collapse toggle on right.'
-
-  button-primary:
-    backgroundColor: '{colors.primary}'
-    textColor: '{colors.on-primary}'
-    typography: '{typography.button-md}'
-    rounded: '{rounded.md}'
-    padding: '{spacing.xs} {spacing.md}'
-    height: 32px
-    description: "Primary action button — 'Data Reduction', 'Solve', 'Accept'."
-
-  button-secondary:
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.ink}'
-    typography: '{typography.button-md}'
-    rounded: '{rounded.md}'
-    borderColor: '{colors.hairline}'
-    padding: '{spacing.xs} {spacing.md}'
-    height: 32px
-    description: "Secondary action — 'Cancel', 'Reset', 'Skip'."
-
-  button-ghost:
-    backgroundColor: 'transparent'
-    textColor: '{colors.body}'
-    typography: '{typography.button-md}'
-    rounded: '{rounded.md}'
-    padding: '{spacing.xs}'
-    height: 28px
-    description: 'Icon-only or ghost button in toolbars and dense areas.'
-
-  button-icon:
-    backgroundColor: 'transparent'
-    textColor: '{colors.body}'
-    rounded: '{rounded.md}'
-    padding: '{spacing.xs}'
-    width: 28px
-    height: 28px
-    description: 'Circular/square icon button for toolbar actions.'
-
-  form-input:
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.ink}'
-    borderColor: '{colors.hairline-strong}'
-    typography: '{typography.body-sm}'
-    rounded: '{rounded.sm}'
-    padding: '0px {spacing.sm}'
-    height: 32px
-    description: 'Text input for numeric parameters (focal length, pixel size, etc.).'
-
-  form-input-mono:
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.ink}'
-    borderColor: '{colors.hairline-strong}'
-    typography: '{typography.coord}'
-    rounded: '{rounded.sm}'
-    padding: '0px {spacing.sm}'
-    height: 32px
-    description: 'Monospace input for RA/Dec coordinate entry.'
-
-  form-select:
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.ink}'
-    borderColor: '{colors.hairline-strong}'
-    typography: '{typography.body-sm}'
-    rounded: '{rounded.sm}'
-    padding: '0px {spacing.sm}'
-    height: 32px
-    description: 'Dropdown select for stretch mode, catalog selection, etc.'
-
-  form-label:
-    textColor: '{colors.body}'
-    typography: '{typography.label}'
-    marginBottom: '{spacing.xs}'
-    description: 'Form field label.'
-
-  form-group:
-    gap: '{spacing.sm}'
-    description: 'Vertical group of label + input.'
-
-  slider:
-    trackColor: '{colors.hairline-strong}'
-    fillColor: '{colors.primary}'
-    thumbColor: '{colors.ink}'
-    height: 4px
-    thumbSize: 14px
-    rounded: '{rounded.pill}'
-    description: 'Range slider for numeric parameters (stretch factor, blink speed, threshold).'
-
-  toggle:
-    trackColor: '{colors.hairline-strong}'
-    trackActiveColor: '{colors.primary}'
-    thumbColor: '{colors.ink}'
-    description: 'Binary toggle for boolean settings.'
-
-  tab:
-    textColor: '{colors.body}'
-    activeTextColor: '{colors.ink}'
-    activeIndicatorColor: '{colors.primary}'
-    typography: '{typography.tab-label}'
-    padding: '{spacing.sm} {spacing.md}'
-    description: 'Section tabs in configuration panels.'
-
-  object-table:
-    headerBackground: '{colors.canvas-soft}'
-    headerTypography: '{typography.caption-mono}'
-    bodyTypography: '{typography.coord}'
-    cellPadding: '{spacing.xs} {spacing.sm}'
-    rowBorder: '{colors.hairline}'
-    rowHoverBackground: '{colors.canvas-soft}'
-    selectedRowBackground: '{colors.selection-bg}'
-    description: 'Astronomical measurement results table. Monospace alignment, zero-padded coordinates.'
-
-  data-table:
-    headerBackground: '{colors.canvas-soft}'
-    headerTypography: '{typography.caption-mono}'
-    bodyTypography: '{typography.body-sm}'
-    cellPadding: '{spacing.xs} {spacing.sm}'
-    rowBorder: '{colors.hairline}'
-    rowHoverBackground: '{colors.canvas-soft}'
-    description: 'Generic data table for star lists and catalog display.'
-
-  blink-controls:
-    backgroundColor: '{colors.canvas}'
-    borderColor: '{colors.hairline}'
-    typography: '{typography.body-sm}'
-    rounded: '{rounded.md}'
-    padding: '{spacing.sm} {spacing.md}'
-    gap: '{spacing.sm}'
-    description: 'Blink comparison control bar. Buttons: play/stop, frame prev/next, speed slider, frame counter.'
-
-  star-chart-overlay:
-    knownObjectColor: '{colors.accent-green}'
-    candidateColor: '{colors.accent-yellow}'
-    referenceStarColor: '{colors.link}'
-    selectedColor: '{colors.primary}'
-    labelTypography: '{typography.caption-mono}'
-    description: 'Overlay drawn on top of FITS canvas. Known objects in green, candidates in yellow, reference stars in blue.'
-
-  crosshair:
-    color: '{colors.accent-green}'
-    size: 40px
-    lineWidth: 1px
-    description: 'Target selection crosshair centered on clicked FITS pixel.'
-
-  mpc-report-preview:
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.ink}'
-    typography: '{typography.code}'
-    rounded: '{rounded.md}'
-    padding: '{spacing.md}'
-    borderColor: '{colors.hairline}'
-    description: 'Monospace text area showing raw MPC report content before submission.'
-
-  status-bar:
-    backgroundColor: '{colors.canvas-soft}'
-    textColor: '{colors.body}'
-    typography: '{typography.caption-mono}'
-    padding: '{spacing.xs} {spacing.md}'
-    borderColor: '{colors.hairline}'
-    description: 'Application status bar at bottom. Shows current frame, cursor RA/Dec, pixel value, FWHM.'
-
-  config-section:
-    gap: '{spacing.md}'
-    description: 'Group of related configuration fields (Telescope / CCD / Catalog / Observer sections).'
-
-  dialog:
-    backgroundColor: '{colors.canvas-soft}'
-    textColor: '{colors.ink}'
-    rounded: '{rounded.lg}'
-    padding: '{spacing.xl}'
-    borderColor: '{colors.hairline}'
-    overlayColor: '#00000080'
-    description: 'Modal dialog for confirmations, alerts, and MPC report preview.'
-
-  toast:
-    backgroundColor: '{colors.canvas}'
-    textColor: '{colors.ink}'
-    rounded: '{rounded.md}'
-    padding: '{spacing.sm} {spacing.md}'
-    typography: '{typography.body-sm}'
-    borderColor: '{colors.hairline}'
-    description: 'Brief notification toast for operation success/failure feedback.'
-
-  progress-bar:
-    trackColor: '{colors.hairline-strong}'
-    fillColor: '{colors.primary}'
-    height: 4px
-    rounded: '{rounded.pill}'
-    description: 'Progress indicator for long operations (plate solving, catalog download).'
-
-  scrollbar:
-    width: 8px
-    thumbColor: '{colors.hairline-strong}'
-    trackColor: '{colors.canvas}'
-    rounded: '{rounded.pill}'
-    description: 'Custom thin scrollbar for panels and tables.'
+name: sky-eye-design-system
+description: SkyEye 桌面应用设计规范 —— 天文图像处理工具。暗色优先、单主色、克制科学工具风。借鉴 Vercel 的设计判断：restraint、精确层级、语义化 token、拒绝 AI 感装饰。
 ---
 
-## 参考边界
+# SkyEye 设计规范
 
-本文参考 [Vercel Design Guidelines](https://vercel.com/design.md) 的设计判断，而不是复制其报告网站外壳或 `vbg-*` 组件：保留克制、清晰层级、共享网格、语义化 token、可访问焦点与响应式重排；不使用 Vercel 品牌标识，也不直接引入 Vercel 报告页 CSS。SkyEye 的暗色优先、纯黑图像画布、科学数据等宽排版和高密度桌面布局仍是最高优先级。
+像 Vercel 一样设计：克制、精确、以证据说话。SkyEye 是天文工作者在夜间观测时长时间使用的桌面图像处理软件，界面必须安静、低干扰、可连续工作数小时而不疲劳。
 
-## 实现约定
+本文参考 [Vercel Design Guidelines](https://vercel.com/design.md) 的设计判断，而不是复制其报告网站外壳或 `vbg-*` 组件：保留 restraint、清晰层级、语义化 token、可访问焦点与响应式重排；不使用 Vercel 品牌标识，也不引入 Vercel 报告页 CSS。SkyEye 的暗色优先、纯黑图像画布、科学数据等宽排版与高密度桌面布局是最高优先级。
 
-- `src/index.css` 是主题 token 的唯一来源；业务组件不得新增十六进制色值。
-- `src/components/ui/` 承载 Button、Field、Input、Select、Toolbar、Panel、Notice 等基础组件；业务组件只负责数据和组合。
-- 颜色必须表达交互或状态。普通分组优先使用间距与层级，避免卡片嵌套、装饰阴影和无意义边框。
+## 产品上下文
+
+把 SkyEye 当作面向专业观测者的精密仪器，而不是营销网页或通用 SaaS。用户的核心任务：
+
+- 查看 FITS 图像，测量可疑目标的坐标（RA/Dec）
+- 对照星历辨认已知天体，标记移动目标
+- 生成 MPC 报告并导出
+- 配置望远镜 / CCD / 星表 / 观测者信息
+
+界面的一切都要让这些任务更直接。**克制科学工具风**：像一台调试良好的仪器，而不是一个有性格的网站。
+
+## 优先级顺序
+
+当需求冲突时，按此顺序保护：
+
+1. **保留科学事实与格式**：测量精度、坐标格式、单位、MPC 报告约定、星表数据，一个都不能错。
+2. **保留宿主框架**：Tauri v2 + React + Tailwind CSS 4（`@theme` token）。`src/index.css` 是主题 token 的唯一来源。
+3. **让观测任务立即清晰**：当前帧、WCS 归算状态、可标记状态、操作进度，一眼可见。
+4. **建立一致的桌面工具身份**：通过布局、排版与克制，而非装饰。
+5. **针对具体场景选择构图**：不套固定模板，每个对话框 / 面板服务于它的任务。
+6. **细化交互与细节**，不削弱层级。
+
+仅在可能改变科学含义、安全或隐私问题时才问用户；否则如实标注未知项并继续。
+
+## 集成方式
+
+- `src/index.css` 是 token 的唯一来源；业务组件**不得新增十六进制色值**，只能引用 token。
+- `src/components/ui/` 承载 Button、Field、Input、Select、Toolbar、Panel、Notice、Dialog 等基础组件；业务组件只负责数据与组合，不重新发明控件样式。
 - 所有可交互控件必须有可见的键盘焦点；仅图标按钮必须提供可访问名称。
-- UI 文本使用 Geist Sans 字体栈，路径、坐标、像素值、时间与短技术标识使用 Geist Mono 字体栈。
+- UI 文本使用 sans 字体栈；坐标、像素值、时间、路径与短技术标识使用 mono 字体栈。
 
-## 设计原则
+## 实施检查（四遍）
 
-### 1. 暗色优先
+**1. 框定用户任务。** 用户此刻要做什么、判断什么？这个界面的最强答案是哪个、证据是什么、什么会改变判断？
 
-天文观测在夜间进行，软件界面的暗色是刚需，不是主题切换的选项。
+**2. 选择构图。** 首屏就是任务，不是摆设。让任务最清晰的信息层级最高。默认套用「常见做法」之前先问：这个材料配得上更贴切的排布吗？
 
-- 默认背景 `#0a0a0a`，比纯黑高一档以区分图像区域
-- FITS 图像显示区域使用纯黑 `#000000`，确保像素值不被界面亮色干扰
-- 所有面板、对话框、工具栏使用不同深度的灰色分层，不依赖彩色阴影
-- 每一步灰度都经过推敲：`#0a0a0a` → `#0d0d0d` → `#111111` → `#2a2a2a` → `#404040`
+**3. 用权威视觉系统实现。** 用下面的 token 与控件，不另起炉灶。
 
-### 2. 图像是主角
+**4. 检查并修改。** 对照「审核清单」逐条自查，删除没有意义的一切，直到没有已知的实质问题。
 
-- FITSViewer 占最大面积，不留任何界面元素在图像上方（工具栏悬浮且半透明）
-- 所有颜色都要考虑在暗色背景上的可读性，以及**不干扰对天文图像的视觉判断**
-- 叠加层（参考星、已知天体、十字线）颜色选择绿色/蓝色光谱，避开红色（夜视保护）——但红色仍用于错误和警告
+## 权威视觉系统
 
-### 3. 精确的数据显示
+### 结构：主窗口布局
 
-- RA/Dec 坐标使用等宽字体，固定列宽，零补全
-- 表格里的数字右对齐，小数位统一
-- 科学记数法只在真正需要时使用
-
-### 4. 克制的色彩
-
-借鉴 Vercel 的原则——主色只有一个：`#0070f3`
-
-| 颜色           | 用途                                             | 示例                                    |
-| -------------- | ------------------------------------------------ | --------------------------------------- |
-| `#0070f3` 蓝   | 主操作、选中状态、任何需要"这就是交互对象"的地方 | Data Reduction 按钮、选中目标、活跃标签 |
-| `#38d9a9` 绿   | 确认、成功、叠加标注                             | 参考星圈、已知天体、测量完成            |
-| `#ffd43b` 黄   | 警告、候选目标                                   | 可疑移动目标、未验证测量                |
-| `#ff6b6b` 红   | 错误、失败、危险操作                             | 解算失败、操作错误                      |
-| `#74c0fc` 浅蓝 | 链接、信息性标注                                 | 文档链接、次要标注                      |
-
-色彩的使用量和饱和度都低——界面大面积是灰色，颜色只出现在有意义的地方。
-
-## 间距
-
-基础单位：**4px**。所有间距值都是 4 的倍数。
-
-| Token | 值   | 用途                           |
-| ----- | ---- | ------------------------------ |
-| `xxs` | 2px  | 极紧凑内边距                   |
-| `xs`  | 4px  | 图标/紧凑按钮 padding          |
-| `sm`  | 8px  | 小间距（按钮和输入框 gap）     |
-| `md`  | 12px | 表单组 gap、面板 padding       |
-| `lg`  | 16px | 组件间间距、表格单元格 padding |
-| `xl`  | 20px | 面板内部 padding               |
-| `2xl` | 24px | 面板间间距                     |
-| `3xl` | 32px | 大卡片 padding                 |
-| `4xl` | 40px | 大区块间距                     |
-| `5xl` | 48px | 窗口边距                       |
-| `6xl` | 64px | 最大间距                       |
-
-**原则：** 紧凑但不拥挤。桌面工具的信息密度天生比营销页面高，但每个区块内部仍然有呼吸感。
-
-## 布局
-
-### 主窗口布局
-
-```
+```text
 ┌──────────────────────────────────────────────────┐
-│  Menu Bar                                         │
+│  Menu Bar / 标题栏                                 │
 ├──────────────────────┬───────────────────────────┤
 │                      │                            │
 │   Panel Sidebar      │    FITSViewer              │
@@ -477,56 +64,153 @@ components:
 │   ├ Config           │    ┌──────────────────┐    │
 │   ├ Object Table     │    │                  │    │
 │   ├ MPC Report       │    │    FITS Canvas   │    │
-│   └ Status           │    │    (100% H/W)    │    │
+│   └ Status           │    │    (纯黑)         │    │
 │                      │    │                  │    │
 │                      │    └──────────────────┘    │
 │                      │    ┌──────────────────┐    │
 │                      │    │ Blink Controls   │    │
 │                      │    └──────────────────┘    │
 ├──────────────────────┴───────────────────────────┤
-│  Status Bar                                        │
+│  Status Bar（22px）                                │
 └──────────────────────────────────────────────────┘
 ```
 
-- **面板侧栏：** 固定 260px 宽，可折叠
-- **FITSViewer：** 占据剩余空间，纯黑背景
-- **Blink Controls：** 浮动在 FITSViewer 底部，不阻挡图像
-- **状态栏：** 22px 高，显示帧信息 / 鼠标位置 RA/Dec / 像素值 / FWHM
+- **面板侧栏**：固定 260px 宽，可折叠。
+- **FITSViewer**：占据剩余空间，背景**纯黑**（`canvas-viewer`），确保像素值不被界面亮色干扰。
+- **工具栏 / Blink 控件**：浮动在图像上，半透明，不阻挡图像。
+- **状态栏**：22px 高，显示帧信息 / 鼠标 RA/Dec / 像素值。
 
-### 断点
+桌面端只有宽度变化：>1200px 全布局展开；800–1200px 侧栏可折叠；<800px 面板堆叠下方。
 
-桌面端只有宽度变化：
+### 排版
 
-| 宽度       | 行为             |
-| ---------- | ---------------- |
-| > 1200px   | 全布局，侧栏展开 |
-| 800-1200px | 侧栏可折叠       |
-| < 800px    | 面板堆叠在下方   |
+**层级靠排版先于表面与颜色。** 不做 arbitrary 字号；对等元素共享 role、size、weight、line-height；绝不因为某个字符串更长就单独缩小它。
 
-## 暗色主题参考
+| Token（Tailwind 4） | 字号 | 行高 | 字重 | 用途                                                      |
+| ------------------- | ---- | ---- | ---- | --------------------------------------------------------- |
+| `text-label`        | 11px | 14   | 500  | 表单标签、小节标题（uppercase + tracking 0.12em + muted） |
+| `text-caption-mono` | 11px | 14   | 400  | 表格表头、状态栏、短技术标识（mono）                      |
+| `text-caption`      | 12px | 16   | 400  | mono 小注（mono）                                         |
+| `text-body-sm`      | 13px | 18   | 400  | 面板正文、表格数据                                        |
+| `text-body-md`      | 15px | 22   | 400  | 主要正文                                                  |
+| `text-body-lg`      | 18px | 28   | 400  | 空态提示                                                  |
+| `text-coord`        | 14px | 20   | 500  | RA/Dec 坐标、测量值（mono，tracking 0.5px）               |
+| `text-code`         | 13px | 20   | 400  | 代码、MPC 报告预览（mono）                                |
+| `text-button`       | 13px | 18   | 500  | 按钮文字                                                  |
+| `text-tab`          | 12px | 16   | 500  | 页签（tracking 0.3px）                                    |
 
-Tailwind CSS 暗色模式配置：
+**最小字号是 label 11px。** 全应用禁止 `text-[9px]` / `text-[10px]` 等低于刻度的任意字号——不靠 tiny gray copy 硬塞密度。坐标等长数值绝不换行，保留显示全部有效位（科学精度）。
 
-```js
-// tailwind.config.js 参考值
-colors: {
-  'sky-canvas': '#111111',
-  'sky-canvas-soft': '#0d0d0d',
-  'sky-canvas-soft-2': '#0a0a0a',
-  'sky-canvas-viewer': '#000000',
-  'sky-ink': '#ededed',
-  'sky-body': '#a1a1a1',
-  'sky-mute': '#666666',
-  'sky-hairline': '#2a2a2a',
-  'sky-hairline-strong': '#404040',
-  'sky-primary': '#0070f3',
-  'sky-accent-green': '#38d9a9',
-  'sky-accent-yellow': '#ffd43b',
-  'sky-accent-red': '#ff6b6b',
-  'sky-link': '#74c0fc',
-  'sky-success': '#38d9a9',
-  'sky-error': '#ff6b6b',
-  'sky-warning': '#ffd43b',
-  'sky-selection': '#1a3a5c',
-}
-```
+### 颜色、表面与边界
+
+**暗色优先是刚需，不是主题选项。** 夜间观测，界面不能刺眼。默认画布 `canvas-soft-2 #0a0a0a`，面板走阶梯灰度：`#0a0a0a → #0d0d0d → #111111 → #2a2a2a → #404040`。
+
+**单色优先。** 界面大面积是灰色，颜色只用于状态、动作或数据标记，并配非颜色线索。主色只有一个：`#0070f3`。
+
+| Token                                       | 值        | 用途                       |
+| ------------------------------------------- | --------- | -------------------------- |
+| `sky-canvas`                                | `#111111` | 面板 / 对话框内层          |
+| `sky-canvas-soft`                           | `#0d0d0d` | 对话框外壳 / 表头 / 状态栏 |
+| `sky-canvas-soft-2`                         | `#0a0a0a` | 窗口默认背景               |
+| `sky-canvas-viewer`                         | `#000000` | FITS 图像画布              |
+| `sky-ink`                                   | `#ededed` | 主要文字                   |
+| `sky-body`                                  | `#a1a1a1` | 次要文字                   |
+| `sky-mute`                                  | `#666666` | 弱化标签 / 小节标题        |
+| `sky-hairline`                              | `#2a2a2a` | 分隔线                     |
+| `sky-hairline-strong`                       | `#404040` | 输入框边框                 |
+| `sky-primary`                               | `#0070f3` | 主操作、选中、交互对象     |
+| `sky-primary-hover`                         | `#0058cc` | primary 悬停               |
+| `sky-on-primary`                            | `#ffffff` | primary 按钮文字           |
+| `sky-control`                               | `#171717` | 输入框背景                 |
+| `sky-accent-green`                          | `#38d9a9` | 确认、已验证、叠加标注     |
+| `sky-accent-yellow`                         | `#ffd43b` | 警告、候选目标             |
+| `sky-accent-red`                            | `#ff6b6b` | 错误、失败、危险操作       |
+| `sky-link`                                  | `#74c0fc` | 链接、信息性标注           |
+| `sky-selection`                             | `#1a3a5c` | 表格选中行                 |
+| `sky-success` / `sky-warning` / `sky-error` | —         | 语义状态色，与 accent 一致 |
+
+**表面与边界必须挣得。** 只有表达选择、交互、警告、对比，或间距无法表达的真实分组时，才用边框或色块。优先用间距、对齐、排版与密度变化。避免嵌套卡片、装饰阴影与无意义边框——**不把每个区块都包进卡片**。
+
+**叠加层配色**（FITSViewer 上方的标记，属数据标记）：
+
+| 用途                                | Token               | 色值      |
+| ----------------------------------- | ------------------- | --------- |
+| 测量标记（用户刚标记的可疑目标）    | `sky-primary`       | `#0070f3` |
+| 已知天体（已验证星历）              | `sky-accent-green`  | `#38d9a9` |
+| 已知天体（degraded_time，时间不准） | `sky-accent-yellow` | `#ffd43b` |
+| 叠加层标签                          | `text-caption-mono` | 11px      |
+
+叠加层用绿 / 黄 / 蓝光谱，**避开红色**（夜视保护）；红色只用于错误与危险。
+
+**硬拒绝**：装饰性渐变、渐变文字、辉光、毛玻璃、纹理、装饰阴影。渐变只允许用于带标签的连续数据色标。
+
+### 控件
+
+- **按钮**：primary / secondary 高 32px（`h-8`），ghost / icon 高 28px。primary 用 `bg-sky-primary text-sky-on-primary`；secondary 用 `bg-sky-canvas border border-sky-hairline text-sky-ink`；ghost / icon 透明底 `text-sky-body`。圆角 `rounded-md`，文字 `text-button`。工具栏按钮只显示 icon + tooltip，不放大装饰。
+- **表单**：输入框 `h-8 rounded-sm border border-sky-hairline-strong bg-sky-control px-2 text-body-sm`，focus 边框转 primary；数字 / 坐标输入用等宽（`text-coord`）。Field 标签 `text-label text-sky-body`。
+- **滑块**：4px 轨道（`hairline-strong`）+ primary 填充 + ink 滑块。
+- **页签**：`text-tab text-sky-body`，激活 `text-sky-ink` + primary 底部指示线。
+- **对话框**：外壳 `bg-sky-canvas-soft rounded-lg border-sky-hairline`，遮罩 50% 黑（`#00000080`），标题 `text-body-sm font-medium text-sky-ink`。对话框内不嵌套卡片；测量结果等用表单组 / 等宽文本呈现。
+
+### 数据与表格
+
+表格是证据，不是装饰。
+
+- 语义化 `<table>`，通常占满可用宽度。
+- 表头 `bg-sky-canvas-soft` + `text-caption-mono`；单元格用等宽（`text-coord` / `text-caption-mono`）保证列对齐。
+- 数字右对齐，小数位统一，坐标零补全；对等列共享对齐与精度。
+- 行分隔 `hairline`，悬停 `canvas-soft`，选中 `selection-bg`。
+- 绝不为了填满布局把窄表格漂在大区块旁边。
+
+## 审核清单
+
+交付前按此顺序自查：
+
+1. **第一印象**：身份是否立即——克制科学工具风，不是 AI 感模板？
+2. **构图**：有没有单一主导对象？每个区块推进任务吗？空白是意外还是意图？
+3. **排版**：对等元素是否共享 role / size / weight / leading？基线对齐吗？垂直节奏是关系化的而非均匀堆叠？
+4. **数据**：表格全宽吗？表头与单元格对齐一致吗？坐标 / 精度正确吗？
+5. **克制**：能否删掉任何表面、边框、图标、颜色、段落而不损失意义？能就删。
+6. **主题与重排**：暗色层级一致吗？窗口缩放后是否溢出、是否字符级换行？
+7. **信任与可达**：焦点可见、标签与语义正确、状态不依赖颜色单独传达？
+
+修掉影响最大的系统性问题，再检查一遍，直到没有已知的实质问题。
+
+## 拒绝生成式设计惯性
+
+不要交付这些可识别的默认模板：
+
+- 全大写 tracked 的 eyebrow、装饰性编号节标签
+- 装饰性渐变、辉光、毛玻璃、装饰阴影
+- 卡片套卡片、用边框修复弱层级
+- 图标放入彩色色块、装饰性大图标、混用图标风格
+- tiny muted 文本、arbitrary 字号、对等元素不一致
+- 窄表格漂在宽区块
+- 重复的相同轮廓区块
+- 处理过程叙述（「这是怎么组织的」「为什么这样选」）
+- 装饰性图表、无意义彩色
+
+不要用「反设计」来补偿——不是简单的黑、细线、大空白。**克制是精确的层级、优秀的排版、清晰的证据、强对齐与深思的张力。**
+
+## 无障碍
+
+语义化 landmark、一个描述性 `h1`、有序标题、焦点可见、语义表格、可访问名称、不依赖颜色单独传达信息。满足 WCAG AA。动画默认静止，尊重 reduced-motion。窗口缩放时先重排，不裁剪、不按字符换行。
+
+## 附录：间距与圆角
+
+基础单位 **4px**，所有间距是 4 的倍数（Tailwind 内置刻度）：
+
+| Tailwind             | 值   | 用途                          |
+| -------------------- | ---- | ----------------------------- |
+| `px-0.5` / `gap-0.5` | 2px  | 极紧凑内边距                  |
+| `1`                  | 4px  | 紧凑按钮 / icon padding       |
+| `2`                  | 8px  | 按钮与输入框 gap              |
+| `3`                  | 12px | 表单组 gap                    |
+| `4`                  | 16px | 组件间距 / 表格单元格 padding |
+| `5`                  | 20px | 面板内边距                    |
+| `6`                  | 24px | 区块间间距                    |
+| `8`                  | 32px | 对话框内边距（大）            |
+
+紧凑但不拥挤：桌面工具的信息密度天生比网页高，但每个区块内部仍有呼吸感。
+
+圆角：`rounded-xs` 2px / `rounded-sm` 4px / `rounded-md` 6px / `rounded-lg` 8px（对话框）/ `rounded-xl` 12px / `rounded-full`（滑块轨道）。保持克制、全应用一致。
