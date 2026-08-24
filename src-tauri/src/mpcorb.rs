@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
-    io::{BufRead, BufReader, BufWriter, Cursor, Write},
+    io::{BufRead, BufReader, BufWriter, Cursor, Read, Write},
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -380,6 +380,79 @@ pub async fn download_and_activate(root: &Path) -> Result<MpcorbManifest, String
     Ok(manifest)
 }
 
+/// Activate a local MPCORB.DAT.gz: validate → sha256 → build index → persist → write manifest.
+/// Shares the same persistence path as `download_and_activate`, so users can fall back to a
+/// local file when the official source is unreachable.
+pub fn activate_local_gz(root: &Path, gz_path: &Path) -> Result<MpcorbManifest, String> {
+    fs::create_dir_all(root).map_err(|e| e.to_string())?;
+    let metadata =
+        fs::metadata(gz_path).map_err(|e| format!("cannot read {}: {e}", gz_path.display()))?;
+    if !metadata.is_file() {
+        return Err(format!("{} is not a regular file", gz_path.display()));
+    }
+    if metadata.len() > MAX_COMPRESSED_BYTES {
+        return Err(format!(
+            "MPCORB file is implausibly large: {} bytes",
+            metadata.len()
+        ));
+    }
+    let sha = {
+        let mut file = File::open(gz_path).map_err(|e| e.to_string())?;
+        let mut hasher = Sha256::new();
+        let mut buf = [0u8; 1 << 20];
+        loop {
+            let n = file.read(&mut buf).map_err(|e| e.to_string())?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buf[..n]);
+        }
+        hex::encode(hasher.finalize())
+    };
+    // Idempotent: same sha with complete files only refreshes the timestamp, no rebuild.
+    if let Ok(previous) = load_active_manifest(root) {
+        if previous.sha256 == sha
+            && previous.parser_version == PARSER_VERSION
+            && root.join(&previous.compressed_file).is_file()
+            && root.join(&previous.index_file).is_file()
+        {
+            let mut manifest = previous;
+            manifest.downloaded_unix = now_unix();
+            write_active_manifest(root, &manifest)?;
+            return Ok(manifest);
+        }
+    }
+    let nonce = uuid::Uuid::new_v4();
+    let tmp_gz = root.join(format!(".mpcorb-download-{nonce}.tmp"));
+    let tmp_index = root.join(format!(".mpcorb-index-{nonce}.tmp"));
+    let _cleanup = TempFiles(vec![tmp_gz.clone(), tmp_index.clone()]);
+    fs::copy(gz_path, &tmp_gz).map_err(|e| e.to_string())?;
+    let record_count = build_index(&tmp_gz, &tmp_index, &sha)?;
+    if record_count < MIN_RECORD_COUNT {
+        return Err(format!(
+            "MPCORB record count {record_count} is implausibly small"
+        ));
+    }
+    let gz_name = format!("mpcorb-{sha}.dat.gz");
+    let index_name = format!("mpcorb-{sha}-{PARSER_VERSION}.bin");
+    persist_content_file(&tmp_gz, &root.join(&gz_name))?;
+    persist_content_file(&tmp_index, &root.join(&index_name))?;
+    let manifest = MpcorbManifest {
+        source_page: MPC_DATA_PAGE.into(),
+        download_url: MPCORB_URL.into(),
+        downloaded_unix: now_unix(),
+        sha256: sha,
+        compressed_file: gz_name,
+        index_file: index_name,
+        record_count,
+        parser_version: PARSER_VERSION.into(),
+        etag: None,
+        last_modified: None,
+    };
+    write_active_manifest(root, &manifest)?;
+    Ok(manifest)
+}
+
 fn build_index(gzip_path: &Path, index_path: &Path, sha: &str) -> Result<usize, String> {
     let gzip = File::open(gzip_path).map_err(|e| e.to_string())?;
     let decoder = GzDecoder::new(BufReader::with_capacity(1024 * 1024, gzip));
@@ -444,6 +517,16 @@ impl Drop for TempFiles {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn activate_local_gz_rejects_missing_file() {
+        let root =
+            std::env::temp_dir().join(format!("skyeye-activate-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let error = activate_local_gz(&root, Path::new("/nonexistent/MPCORB.DAT.gz"))
+            .expect_err("missing file must fail");
+        assert!(error.contains("cannot read"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
     #[test]
     fn packed_epoch() {
         assert!((unpack_epoch("K2411").unwrap() - 2460310.5).abs() < 1e-9);

@@ -181,6 +181,9 @@ export async function renameTargetMeasurement(
 export async function updateMpcorb(): Promise<MpcorbManifest> {
   return invoke('update_mpcorb')
 }
+export async function importMpcorb(sourcePath: string): Promise<MpcorbManifest> {
+  return invoke('import_mpcorb', { sourcePath })
+}
 export async function getMpcorbStatus(): Promise<MpcorbManifest | null> {
   return invoke('get_mpcorb_status')
 }

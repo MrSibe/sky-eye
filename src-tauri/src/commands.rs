@@ -1241,6 +1241,38 @@ pub async fn update_mpcorb(
     *state.mpcorb_cache.lock().map_err(|e| e.to_string())? = None;
     Ok(manifest)
 }
+/// Import a local MPCORB.DAT.gz as an alternative to `update_mpcorb` (auto-download).
+#[tauri::command]
+pub async fn import_mpcorb(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    source_path: String,
+) -> Result<MpcorbManifest, String> {
+    let root = mpc_root(&app)?;
+    let source = std::path::PathBuf::from(&source_path);
+    if !source.is_file() {
+        return Err(format!("{source_path} is not a valid file"));
+    }
+    // Accept both .gz and .GZ — Windows/Linux downloads often keep the
+    // uppercase extension from the MPC website (MPCORB.DAT.GZ).
+    if !source
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("gz"))
+    {
+        return Err("please select a .gz compressed MPCORB catalog (e.g. MPCORB.DAT.gz)".into());
+    }
+    // Reuse the same activation pipeline as auto-download, then drop the cached orbits
+    // so the next known-object query picks up the imported database. Parsing the full
+    // catalog takes minutes, so run it on the blocking pool like `update_mpcorb`.
+    let manifest =
+        tokio::task::spawn_blocking(move || crate::mpcorb::activate_local_gz(&root, &source))
+            .await
+            .map_err(|e| format!("MPCORB import worker failed: {e}"))?
+            .map_err(|e| format!("MPCORB import failed: {e}"))?;
+    *state.mpcorb_cache.lock().map_err(|e| e.to_string())? = None;
+    Ok(manifest)
+}
 #[tauri::command]
 pub fn get_mpcorb_status(app: tauri::AppHandle) -> Result<Option<MpcorbManifest>, String> {
     match crate::mpcorb::load_active_manifest(&mpc_root(&app)?) {

@@ -53,6 +53,7 @@ pub fn run() {
             commands::delete_target_measurement,
             commands::rename_target_measurement,
             commands::update_mpcorb,
+            commands::import_mpcorb,
             commands::get_mpcorb_status,
             commands::search_known_objects,
             commands::search_known_objects_batch,
