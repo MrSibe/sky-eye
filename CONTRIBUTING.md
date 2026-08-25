@@ -11,12 +11,12 @@
 
 ## 环境准备
 
-| 依赖 | 版本 | 说明 |
-|---|---|---|
-| Node.js | 22.x | 前端构建与工具链 |
-| pnpm | 11.1.3 | 由 `package.json` 的 `packageManager` 字段锁定 |
-| Rust | stable 工具链 | 含 `clippy`、`rustfmt` 组件；与 CI 的 `dtolnay/rust-toolchain@stable` 一致 |
-| Tauri 系统依赖 | 平台相关 | Linux 见 [Tauri 官方文档](https://v2.tauri.app/start/prerequisites/)（CI 安装 `libwebkit2gtk-4.1-dev` 等） |
+| 依赖           | 版本          | 说明                                                                                                       |
+| -------------- | ------------- | ---------------------------------------------------------------------------------------------------------- |
+| Node.js        | 22.x          | 前端构建与工具链                                                                                           |
+| pnpm           | 11.1.3        | 由 `package.json` 的 `packageManager` 字段锁定                                                             |
+| Rust           | stable 工具链 | 含 `clippy`、`rustfmt` 组件；与 CI 的 `dtolnay/rust-toolchain@stable` 一致                                 |
+| Tauri 系统依赖 | 平台相关      | Linux 见 [Tauri 官方文档](https://v2.tauri.app/start/prerequisites/)（CI 安装 `libwebkit2gtk-4.1-dev` 等） |
 
 首次拉取后：
 
@@ -41,15 +41,15 @@ pnpm check
 
 它依次执行：
 
-| 命令 | 内容 |
-|---|---|
-| `pnpm format:check` | Prettier 格式检查 |
-| `pnpm lint` | ESLint（`--max-warnings 0`，零容忍） |
-| `pnpm version:check` | 三处版本号一致性（`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`） |
-| `pnpm build` | TypeScript 类型检查 + Vite 生产构建 |
-| `pnpm rust:fmt:check` | `cargo fmt --check` |
-| `pnpm rust:clippy` | `cargo clippy --all-targets -- -D warnings`（零告警） |
-| `pnpm rust:test` | `cargo test --all-targets` |
+| 命令                  | 内容                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `pnpm format:check`   | Prettier 格式检查                                                                         |
+| `pnpm lint`           | ESLint（`--max-warnings 0`，零容忍）                                                      |
+| `pnpm version:check`  | 三处版本号一致性（`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`） |
+| `pnpm build`          | TypeScript 类型检查 + Vite 生产构建                                                       |
+| `pnpm rust:fmt:check` | `cargo fmt --check`                                                                       |
+| `pnpm rust:clippy`    | `cargo clippy --all-targets -- -D warnings`（零告警）                                     |
+| `pnpm rust:test`      | `cargo test --all-targets`                                                                |
 
 > Rust 侧语法改动（新增 `as_chunks` 等较新的标准库 API）前，确认你的工具链与 CI 的 stable 一致，避免本地通过、CI 失败。
 

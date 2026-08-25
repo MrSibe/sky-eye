@@ -1,7 +1,7 @@
 name: Bug 报告
 description: 报告 Sky Eye 的异常行为
-title: "[Bug] "
-labels: ["bug"]
+title: '[Bug] '
+labels: ['bug']
 body:
   - type: textarea
     id: description
