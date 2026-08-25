@@ -843,7 +843,7 @@ fn triangles(points: &[Point]) -> Vec<Triangle> {
     let triangulation = triangulate(&coordinates);
     let mut neighbours = vec![HashSet::new(); points.len()];
     let mut index_sets = HashSet::new();
-    for triangle in triangulation.triangles.chunks_exact(3) {
+    for triangle in triangulation.triangles.as_chunks::<3>().0 {
         let mut indices = [triangle[0], triangle[1], triangle[2]];
         indices.sort_unstable();
         index_sets.insert(indices);

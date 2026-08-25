@@ -34,6 +34,7 @@ import {
   deleteTargetMeasurement,
   renameTargetMeasurement,
   updateMpcorb,
+  importMpcorb,
   getAppConfig,
   saveAppConfig,
   previewReport,
@@ -511,6 +512,14 @@ function App() {
     setScienceBusy(true)
     try {
       setMpcorb(await updateMpcorb())
+    } finally {
+      setScienceBusy(false)
+    }
+  }, [])
+  const handleMpcImport = useCallback(async (sourcePath: string) => {
+    setScienceBusy(true)
+    try {
+      setMpcorb(await importMpcorb(sourcePath))
     } finally {
       setScienceBusy(false)
     }
@@ -1168,6 +1177,7 @@ function App() {
             onClose={() => setSettingsOpen(false)}
             onSave={handleSaveConfig}
             onUpdateMpcorb={handleMpcUpdate}
+            onImportMpcorb={handleMpcImport}
           />
         )}
 

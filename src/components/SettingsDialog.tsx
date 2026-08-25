@@ -11,6 +11,7 @@ import {
   RefreshCw,
   SlidersHorizontal,
   Telescope,
+  Upload,
   X,
 } from 'lucide-react'
 import {
@@ -30,6 +31,7 @@ interface Props {
   onClose: () => void
   onSave: (config: AppConfig) => Promise<void>
   onUpdateMpcorb: () => Promise<void>
+  onImportMpcorb: (sourcePath: string) => Promise<void>
 }
 
 type Tab = 'station' | 'instrument' | 'reduction' | 'photometry' | 'data' | 'about'
@@ -129,6 +131,7 @@ export function SettingsDialog({
   onClose,
   onSave,
   onUpdateMpcorb,
+  onImportMpcorb,
 }: Props) {
   const [draft, setDraft] = useState<AppConfig | null>(null)
   const [tab, setTab] = useState<Tab>('station')
@@ -231,6 +234,21 @@ export function SettingsDialog({
       setMpcorbError(String(reason))
     }
   }, [onUpdateMpcorb])
+
+  const importMpcorbDatabase = useCallback(async () => {
+    setMpcorbError(null)
+    try {
+      const selected = await open({
+        title: '选择 MPCORB 压缩星表（MPCORB.DAT.gz）',
+        multiple: false,
+        filters: [{ name: 'Gzip 压缩星表', extensions: ['gz', 'GZ'] }],
+      })
+      if (typeof selected !== 'string') return
+      await onImportMpcorb(selected)
+    } catch (reason) {
+      setMpcorbError(String(reason))
+    }
+  }, [onImportMpcorb])
 
   useEffect(() => {
     if (!config) return
@@ -1345,6 +1363,14 @@ export function SettingsDialog({
                         <p className="mt-3 text-label leading-4 text-sky-error">{mpcorbError}</p>
                       )}
                     </div>
+                    <Button
+                      size="sm"
+                      onClick={() => void importMpcorbDatabase()}
+                      disabled={mpcorbBusy}
+                    >
+                      <Upload size={13} />
+                      从本地导入
+                    </Button>
                     <Button
                       size="sm"
                       onClick={() => void updateMpcorbDatabase()}
