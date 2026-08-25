@@ -35,7 +35,7 @@
 
 ### 已知天体标注
 
-- 下载并自动更新 MPCORB 轨道数据库
+- 下载并自动更新 MPCORB 轨道数据库（网络不可用时可在「设置 → 数据」中从本地 `.gz` 文件导入）
 - 本地二体传播用于整场快速候选预筛；结果明确标记为本地预测，缺少 DUT1/EOP 时标记为降级时间
 - 联网时自动使用 JPL Small-Body Identification `two-pass=true` 精化整场结果；服务不可用时保留本地候选并记录 warning
 - MPC MPChecker 用于已测量目标的人工交叉检查；严格离线高精度留给未来的 OpenOrb sidecar
