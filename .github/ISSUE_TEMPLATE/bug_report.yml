@@ -1,0 +1,46 @@
+name: Bug 报告
+description: 报告 Sky Eye 的异常行为
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 发生了什么，期望行为是什么
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 最小化的复现路径（图片/文件操作步骤）
+      placeholder: |
+        1. 打开设置 → 数据
+        2. 点击...
+        3. 观察到...
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows
+        - Linux
+        - macOS
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 设置 → 关于 中显示的版本号
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: 如有崩溃日志或应用日志（Windows 下可查看 %LOCALAPPDATA% 下的 Sky Eye 数据目录），粘贴在此
+      render: text
