@@ -101,6 +101,8 @@ export interface TargetMeasurement {
   photometric_catalog: string | null
   designation: string
   match_status: MatchStatus
+  stale: boolean
+  stale_reason: string | null
   provenance: Record<string, unknown>
 }
 export interface MpcorbManifest {
@@ -422,7 +424,9 @@ export interface AppConfig {
 export async function getAppConfig(): Promise<AppConfig> {
   return invoke('get_app_config')
 }
-export async function saveAppConfig(config: AppConfig): Promise<void> {
+export async function saveAppConfig(
+  config: AppConfig,
+): Promise<{ scientific_cache_invalidated: boolean }> {
   return invoke('save_app_config', { config })
 }
 

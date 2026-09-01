@@ -79,6 +79,7 @@ export interface AstrometricQuality {
 }
 
 export interface FrameAnalysis {
+  detection_revision?: string | null
   detection: DetectionResult | null
   catalog: GaiaQueryResult | null
   solution: PlateSolveResult | null
