@@ -16,6 +16,7 @@ use crate::reduction::{
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -106,11 +107,30 @@ pub struct DetectionResult {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct FrameAnalysis {
+    pub detection_revision: Option<String>,
     pub detection: Option<DetectionResult>,
     pub catalog: Option<GaiaQueryResult>,
     pub solution: Option<platesolve::PlateSolveResult>,
     pub photometry: Option<FramePhotometry>,
     pub photometry_error: Option<String>,
+}
+
+const DETECTION_ALGORITHM_VERSION: &str = "sep-1.3-gaussian-window-v2";
+
+#[derive(Serialize)]
+struct DetectionRevisionInput<'a> {
+    frame: &'a fits::registry::FrameIdentity,
+    threshold_sigma: f32,
+    minimum_fwhm_px: f64,
+    maximum_reference_stars: usize,
+    saturation_level: Option<f64>,
+    saturation_source: &'static str,
+    algorithm_version: &'static str,
+}
+
+fn detection_revision(input: &DetectionRevisionInput<'_>) -> Result<String, String> {
+    let bytes = serde_json::to_vec(input).map_err(|error| error.to_string())?;
+    Ok(hex::encode(Sha256::digest(bytes)))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -322,7 +342,7 @@ pub async fn load_frames(
                 frame.metadata.observation_midpoint_utc =
                     midpoint_rfc3339(&value, exposure, &time_settings, reference.as_deref());
             }
-            registry.push_loaded(frame);
+            registry.push_loaded(frame)?;
         }
         Ok::<_, String>(registry)
     })
@@ -431,79 +451,6 @@ pub async fn detect_stars(
     .await
 }
 
-fn detect_frame(state: &AppState, idx: usize) -> Result<DetectionResult, String> {
-    if let Some(cached) = state
-        .frame_analyses
-        .lock()
-        .map_err(|e| e.to_string())?
-        .get(idx)
-        .and_then(|analysis| analysis.detection.clone())
-    {
-        return Ok(cached);
-    }
-
-    let (mut pixels, valid_pixels, width, height, saturation_level, gain_e_per_adu) = {
-        let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
-        let data = frames.get(idx)?;
-        (
-            data.pixels.clone(),
-            data.valid_pixels.clone(),
-            data.width,
-            data.height,
-            data.metadata.saturation_level,
-            data.metadata.gain_e_per_adu,
-        )
-    };
-    fill_invalid_pixels(&mut pixels, &valid_pixels);
-    let reducer = SepReducer;
-    let bkg = reducer
-        .background(&pixels, width, height, BackgroundConfig::default())
-        .map_err(|error| error.to_string())?;
-    let mut stars = reducer
-        .detect(
-            &pixels,
-            width,
-            height,
-            &bkg,
-            DetectionConfig {
-                threshold_sigma: 4.0,
-                ..DetectionConfig::default()
-            },
-        )
-        .map_err(|error| error.to_string())?;
-
-    let saturated_count =
-        mark_saturated_sources(&mut stars, &pixels, width, height, saturation_level);
-    log::debug!(
-        "[sky-eye][sources] saturation: header={saturation_level:?} rejected={saturated_count}"
-    );
-    refine_astrometric_centroids(
-        &mut stars,
-        &pixels,
-        &valid_pixels,
-        width,
-        height,
-        &bkg,
-        gain_e_per_adu,
-    );
-    let num_stars = stars.len() as u32;
-    let astrometry_stars = select_astrometry_sources(&stars, width, height, 120);
-    let result = DetectionResult {
-        stars,
-        astrometry_stars,
-        noise: bkg.global_rms,
-        background: bkg.global,
-        num_stars,
-        backend: "SEP 1.3",
-    };
-    let mut analyses = state.frame_analyses.lock().map_err(|e| e.to_string())?;
-    let analysis = analyses
-        .get_mut(idx)
-        .ok_or("Invalid frame analysis index")?;
-    analysis.detection = Some(result.clone());
-    Ok(result)
-}
-
 async fn detect_frame_async(
     state: &AppState,
     idx: usize,
@@ -512,34 +459,144 @@ async fn detect_frame_async(
     maximum_reference_stars: usize,
     saturation_override: Option<f64>,
 ) -> Result<DetectionResult, String> {
-    if let Some(cached) = state
-        .frame_analyses
-        .lock()
-        .map_err(|e| e.to_string())?
-        .get(idx)
-        .and_then(|a| a.detection.clone())
-    {
-        return Ok(cached);
-    }
-    let (mut pixels, valid_pixels, width, height, saturation_level, gain_e_per_adu) = {
+    let (
+        mut pixels,
+        valid_pixels,
+        width,
+        height,
+        saturation_level,
+        saturation_source,
+        gain_e_per_adu,
+        identity,
+    ) = {
         let mut frames = state.loaded_frames.lock().map_err(|e| e.to_string())?;
         let data = frames.get(idx)?;
+        let identity = frames.identity(idx)?.clone();
+        let (saturation, source) = match data.metadata.saturation_level {
+            Some(value) => (Some(value), "fits_header"),
+            None if saturation_override.is_some() => (saturation_override, "instrument_config"),
+            None => (None, "none"),
+        };
         (
             data.pixels.clone(),
             data.valid_pixels.clone(),
             data.width,
             data.height,
-            data.metadata.saturation_level.or(saturation_override),
+            saturation,
+            source,
             data.metadata.gain_e_per_adu,
+            identity,
         )
     };
-    let result=tokio::task::spawn_blocking(move||{fill_invalid_pixels(&mut pixels,&valid_pixels);let reducer=SepReducer;let bkg=reducer.background(&pixels,width,height,BackgroundConfig::default()).map_err(|e|e.to_string())?;let mut stars=reducer.detect(&pixels,width,height,&bkg,DetectionConfig{threshold_sigma,..DetectionConfig::default()}).map_err(|e|e.to_string())?;let saturated_count=mark_saturated_sources(&mut stars,&pixels,width,height,saturation_level);log::debug!("[sky-eye][sources] saturation: effective={saturation_level:?} rejected={saturated_count}");refine_astrometric_centroids(&mut stars,&pixels,&valid_pixels,width,height,&bkg,gain_e_per_adu);stars.retain(|star|star.fwhm>=minimum_fwhm_px);let num_stars=stars.len()as u32;let astrometry_stars=select_astrometry_sources(&stars,width,height,maximum_reference_stars.clamp(8,500));Ok::<_,String>(DetectionResult{stars,astrometry_stars,noise:bkg.global_rms,background:bkg.global,num_stars,backend:"SEP 1.3"})}).await.map_err(|e|format!("source-detection worker failed: {e}"))??;
+    let revision = detection_revision(&DetectionRevisionInput {
+        frame: &identity,
+        threshold_sigma,
+        minimum_fwhm_px,
+        maximum_reference_stars,
+        saturation_level,
+        saturation_source,
+        algorithm_version: DETECTION_ALGORITHM_VERSION,
+    })?;
+    {
+        let mut analyses = state.frame_analyses.lock().map_err(|e| e.to_string())?;
+        let analysis = analyses
+            .get_mut(idx)
+            .ok_or("Invalid frame analysis index")?;
+        if analysis.detection_revision.as_deref() == Some(&revision) {
+            if let Some(cached) = analysis.detection.clone() {
+                return Ok(cached);
+            }
+        } else if analysis.detection_revision.is_some() || analysis.detection.is_some() {
+            *analysis = FrameAnalysis::default();
+        }
+    }
+    mark_frame_measurements_stale(state, idx, "检测参数或输入文件标识已变化")?;
+    let result = tokio::task::spawn_blocking(move || {
+        fill_invalid_pixels(&mut pixels, &valid_pixels);
+        let reducer = SepReducer;
+        let background = reducer
+            .background(&pixels, width, height, BackgroundConfig::default())
+            .map_err(|error| error.to_string())?;
+        let mut stars = reducer
+            .detect(
+                &pixels,
+                width,
+                height,
+                &background,
+                DetectionConfig {
+                    threshold_sigma,
+                    ..DetectionConfig::default()
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        let saturated_count =
+            mark_saturated_sources(&mut stars, &pixels, width, height, saturation_level);
+        log::debug!(
+            "[sky-eye][sources] saturation: effective={saturation_level:?} rejected={saturated_count}"
+        );
+        refine_astrometric_centroids(
+            &mut stars,
+            &pixels,
+            &valid_pixels,
+            width,
+            height,
+            &background,
+            gain_e_per_adu,
+        );
+        stars.retain(|star| star.fwhm >= minimum_fwhm_px);
+        let num_stars = stars.len() as u32;
+        let astrometry_stars = select_astrometry_sources(
+            &stars,
+            width,
+            height,
+            maximum_reference_stars.clamp(8, 500),
+        );
+        Ok::<_, String>(DetectionResult {
+            stars,
+            astrometry_stars,
+            noise: background.global_rms,
+            background: background.global,
+            num_stars,
+            backend: "SEP 1.3",
+        })
+    })
+    .await
+    .map_err(|error| format!("source-detection worker failed: {error}"))??;
     let mut analyses = state.frame_analyses.lock().map_err(|e| e.to_string())?;
-    analyses
+    let analysis = analyses
         .get_mut(idx)
-        .ok_or("Invalid frame analysis index")?
-        .detection = Some(result.clone());
+        .ok_or("Invalid frame analysis index")?;
+    analysis.detection_revision = Some(revision);
+    analysis.detection = Some(result.clone());
     Ok(result)
+}
+
+fn mark_frame_measurements_stale(
+    state: &AppState,
+    frame_index: usize,
+    reason: &str,
+) -> Result<(), String> {
+    for measurement in state
+        .pending_measurements
+        .lock()
+        .map_err(|error| error.to_string())?
+        .values_mut()
+        .filter(|measurement| measurement.frame_index == frame_index)
+    {
+        measurement.stale = true;
+        measurement.stale_reason = Some(reason.to_string());
+    }
+    for measurement in state
+        .measurements
+        .lock()
+        .map_err(|error| error.to_string())?
+        .iter_mut()
+        .filter(|measurement| measurement.frame_index == frame_index)
+    {
+        measurement.stale = true;
+        measurement.stale_reason = Some(reason.to_string());
+    }
+    Ok(())
 }
 
 fn fill_invalid_pixels(pixels: &mut [f32], valid_pixels: &[bool]) {
@@ -935,12 +992,21 @@ pub fn measure_aperture(
 }
 
 #[tauri::command]
-pub fn measure_target(
+pub async fn measure_target(
     app: tauri::AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
     request: MeasureTargetRequest,
 ) -> Result<TargetMeasurement, String> {
-    let detection = detect_frame(&state, request.frame_index)?;
+    let settings = crate::storage::load_config(&app)?;
+    let detection = detect_frame_async(
+        &state,
+        request.frame_index,
+        settings.reduction.detection_sigma as f32,
+        settings.reduction.minimum_fwhm_px,
+        settings.reduction.maximum_reference_stars as usize,
+        settings.instrument.saturation_adu,
+    )
+    .await?;
     let source = detection
         .stars
         .iter()
@@ -964,7 +1030,6 @@ pub fn measure_target(
             )
         })
         .unwrap_or((request.x, request.y, None, None, 0, false, None, None));
-    let settings = crate::storage::load_config(&app)?;
     let mut fwhms: Vec<f64> = detection
         .stars
         .iter()
@@ -1074,6 +1139,8 @@ pub fn measure_target(
         photometric_catalog: None,
         designation: String::new(),
         match_status: MatchStatus::Unmatched,
+        stale: false,
+        stale_reason: None,
         provenance: serde_json::json!({"centroid":if source.is_some(){"SEP Gaussian-window centroid"}else{"user click"},"photometry":"SEP aperture","frame_median_fwhm_px":frame_fwhm}),
     };
     if let Some(calibrated) = photometry {
@@ -1683,9 +1750,58 @@ pub fn get_app_config(app: tauri::AppHandle) -> Result<crate::storage::AppConfig
 #[tauri::command]
 pub fn save_app_config(
     app: tauri::AppHandle,
+    state: State<AppState>,
     config: crate::storage::AppConfig,
-) -> Result<(), String> {
-    crate::storage::save_config(&app, &config)
+) -> Result<ConfigSaveResult, String> {
+    let previous = crate::storage::load_config(&app)?;
+    let previous_science = serde_json::json!({
+        "instrument": previous.instrument,
+        "time": previous.time,
+        "reduction": previous.reduction,
+        "photometry": previous.photometry,
+    });
+    let next_science = serde_json::json!({
+        "instrument": &config.instrument,
+        "time": &config.time,
+        "reduction": &config.reduction,
+        "photometry": &config.photometry,
+    });
+    crate::storage::save_config(&app, &config)?;
+    let scientific_cache_invalidated = previous_science != next_science;
+    if scientific_cache_invalidated {
+        for analysis in state
+            .frame_analyses
+            .lock()
+            .map_err(|error| error.to_string())?
+            .iter_mut()
+        {
+            *analysis = FrameAnalysis::default();
+        }
+        for index in 0..state
+            .loaded_frames
+            .lock()
+            .map_err(|error| error.to_string())?
+            .len()
+        {
+            mark_frame_measurements_stale(&state, index, "科学设置已变化，需要重新归算")?;
+        }
+        for run in state
+            .reduction_runs
+            .lock()
+            .map_err(|error| error.to_string())?
+            .values_mut()
+        {
+            run["active"] = serde_json::Value::Bool(false);
+        }
+    }
+    Ok(ConfigSaveResult {
+        scientific_cache_invalidated,
+    })
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConfigSaveResult {
+    pub scientific_cache_invalidated: bool,
 }
 
 #[tauri::command]
@@ -2965,12 +3081,53 @@ pub fn blink_get_state(state: State<AppState>) -> Result<BlinkState, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        detect_frame, midpoint_adjustment_seconds, midpoint_rfc3339, reference_count_attempts,
-        solve_frame, AppState, FrameAnalysis, SolveParams,
+        detect_frame_async, detection_revision, midpoint_adjustment_seconds, midpoint_rfc3339,
+        reference_count_attempts, solve_frame, AppState, DetectionRevisionInput, FrameAnalysis,
+        SolveParams, DETECTION_ALGORITHM_VERSION,
     };
     use crate::{fits, project::sha256_file};
     use serde::Deserialize;
     use std::path::PathBuf;
+
+    fn revision(
+        threshold_sigma: f32,
+        minimum_fwhm_px: f64,
+        maximum_reference_stars: usize,
+        saturation_level: Option<f64>,
+    ) -> String {
+        let frame = fits::registry::FrameIdentity {
+            canonical_path: "C:/fixtures/frame.fits".into(),
+            file_len: 4096,
+            modified_ns: 123,
+            sha256: "abc".into(),
+            selected_hdu: 2,
+            reader_version: fits::registry::FITS_READER_VERSION,
+        };
+        detection_revision(&DetectionRevisionInput {
+            frame: &frame,
+            threshold_sigma,
+            minimum_fwhm_px,
+            maximum_reference_stars,
+            saturation_level,
+            saturation_source: if saturation_level.is_some() {
+                "configured"
+            } else {
+                "none"
+            },
+            algorithm_version: DETECTION_ALGORITHM_VERSION,
+        })
+        .expect("revision hash")
+    }
+
+    #[test]
+    fn detection_revision_tracks_every_scientific_parameter() {
+        let baseline = revision(4.0, 0.7, 120, Some(60_000.0));
+        assert_eq!(baseline, revision(4.0, 0.7, 120, Some(60_000.0)));
+        assert_ne!(baseline, revision(5.0, 0.7, 120, Some(60_000.0)));
+        assert_ne!(baseline, revision(4.0, 1.2, 120, Some(60_000.0)));
+        assert_ne!(baseline, revision(4.0, 0.7, 80, Some(60_000.0)));
+        assert_ne!(baseline, revision(4.0, 0.7, 120, Some(50_000.0)));
+    }
 
     #[derive(Deserialize)]
     struct GoldenManifest {
@@ -3040,12 +3197,16 @@ mod tests {
         {
             let mut loaded = state.loaded_frames.lock().unwrap();
             for path in &paths {
-                loaded.push_loaded(load_golden(path));
+                loaded
+                    .push_loaded(load_golden(path))
+                    .expect("index golden frame");
             }
         }
         *state.frame_analyses.lock().unwrap() = vec![FrameAnalysis::default(); paths.len()];
         for (index, frame) in manifest.frames.iter().enumerate() {
-            let detection = detect_frame(&state, index).expect("golden detection");
+            let detection = detect_frame_async(&state, index, 4.0, 0.7, 120, Some(60_000.0))
+                .await
+                .expect("golden detection");
             assert!(
                 detection.astrometry_stars.len() >= 20,
                 "{} detections",

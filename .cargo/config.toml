@@ -1,0 +1,4 @@
+[env]
+# CI and package scripts invoke Cargo from the repository root. Make the
+# bundled CFITSIO CMake build use native Windows synchronization there too.
+CMAKE_TOOLCHAIN_FILE = { value = "src-tauri/cmake/cfitsio-platform.cmake", relative = true }

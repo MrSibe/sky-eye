@@ -168,7 +168,7 @@ function App() {
     (total, objects) => total + objects.length,
     0,
   )
-  const reportMeasurements = measurements
+  const reportMeasurements = measurements.filter((measurement) => !measurement.stale)
   const reportContext = useMemo<ReportContext | null>(
     () =>
       appConfig

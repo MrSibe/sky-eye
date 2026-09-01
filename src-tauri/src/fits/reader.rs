@@ -594,6 +594,10 @@ fn stage_for_cfitsio(path: &Path) -> Result<PathBuf, String> {
 }
 
 pub fn load_fits(path: &str) -> Result<FitsData, String> {
+    load_fits_hdu(path, None)
+}
+
+pub fn load_fits_hdu(path: &str, requested_hdu: Option<usize>) -> Result<FitsData, String> {
     let path = Path::new(path);
     let (fits, staged) = match open_disk_fits(path) {
         Ok(fits) => (fits, None),
@@ -607,14 +611,18 @@ pub fn load_fits(path: &str) -> Result<FitsData, String> {
             (fits, Some(staged))
         }
     };
-    let result = read_open_fits(fits, path);
+    let result = read_open_fits(fits, path, requested_hdu);
     if let Some(staged) = staged {
         let _ = std::fs::remove_file(staged);
     }
     result
 }
 
-fn read_open_fits(mut fits: FitsFile, path: &Path) -> Result<FitsData, String> {
+fn read_open_fits(
+    mut fits: FitsFile,
+    path: &Path,
+    requested_hdu: Option<usize>,
+) -> Result<FitsData, String> {
     let num_hdus = fits.num_hdus().map_err(|e| e.to_string())?;
     let mut image_hdus = Vec::new();
     for index in 0..num_hdus {
@@ -625,12 +633,20 @@ fn read_open_fits(mut fits: FitsFile, path: &Path) -> Result<FitsData, String> {
             }
         }
     }
-    let (selected_hdu, shape) = image_hdus
-        .iter()
-        .find(|(index, _)| *index == 0)
-        .or_else(|| image_hdus.first())
-        .cloned()
-        .ok_or_else(|| "FITS file has no non-empty two-dimensional image HDU".to_string())?;
+    let selected = if let Some(requested) = requested_hdu {
+        image_hdus.iter().find(|(index, _)| *index == requested)
+    } else {
+        image_hdus
+            .iter()
+            .find(|(index, _)| *index == 0)
+            .or_else(|| image_hdus.first())
+    };
+    let (selected_hdu, shape) = selected.cloned().ok_or_else(|| {
+        requested_hdu.map_or_else(
+            || "FITS file has no non-empty two-dimensional image HDU".to_string(),
+            |requested| format!("FITS HDU {requested} is no longer a two-dimensional image"),
+        )
+    })?;
     let height = shape[0] as u32;
     let width = shape[1] as u32;
     let mut metadata = read_metadata(&mut fits, selected_hdu, image_hdus.len())?;

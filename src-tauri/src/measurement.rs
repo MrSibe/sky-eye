@@ -27,6 +27,10 @@ pub struct TargetMeasurement {
     pub photometric_catalog: Option<String>,
     pub designation: String,
     pub match_status: MatchStatus,
+    #[serde(default)]
+    pub stale: bool,
+    #[serde(default)]
+    pub stale_reason: Option<String>,
     pub provenance: serde_json::Value,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
