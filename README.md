@@ -91,4 +91,4 @@ Sky Eye 支持 **Windows x64**、**macOS（Apple Silicon 与 Intel）** 与 **Li
 
 ## 反馈
 
-Sky Eye 目前处于早期版本（v0.2.0-rc.1），功能正在持续开发中。如遇问题或有功能建议，欢迎在 [GitHub Issues](https://github.com/MrSibe/sky-eye/issues) 提交反馈。
+Sky Eye 当前正式版本为 **v0.2.2**，仍处于持续科学验收阶段。如遇问题或有功能建议，欢迎在 [GitHub Issues](https://github.com/MrSibe/sky-eye/issues) 提交反馈。

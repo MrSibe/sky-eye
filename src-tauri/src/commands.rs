@@ -3225,6 +3225,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mandatory_panstarrs_crops_load_and_detect_offline() {
+        let manifest: GoldenManifest =
+            serde_json::from_str(include_str!("../tests/golden/panstarrs-xy54-crop.json"))
+                .expect("crop manifest");
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+        let state = AppState::new();
+        {
+            let mut loaded = state.loaded_frames.lock().unwrap();
+            for frame in &manifest.frames {
+                let path = root.join(&frame.file);
+                assert_eq!(sha256_file(&path).expect("crop checksum"), frame.sha256);
+                let data = load_golden(&path);
+                assert_eq!((data.width, data.height), (1024, 1024));
+                assert!(data.metadata.date_obs.is_some());
+                loaded.push_loaded(data).expect("index crop");
+            }
+        }
+        *state.frame_analyses.lock().unwrap() =
+            vec![FrameAnalysis::default(); manifest.frames.len()];
+        for (index, frame) in manifest.frames.iter().enumerate() {
+            let detection = detect_frame_async(&state, index, 4.0, 0.7, 120, Some(60_000.0))
+                .await
+                .expect("offline golden detection");
+            assert!(
+                detection.astrometry_stars.len() >= 10,
+                "{} only produced {} usable stars",
+                frame.file,
+                detection.astrometry_stars.len()
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn reduces_panstarrs_golden_frames_when_configured() {
         let Ok(root) = std::env::var("SKYEYE_GOLDEN_DIR") else {
             return;

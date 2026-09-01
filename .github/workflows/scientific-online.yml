@@ -1,0 +1,45 @@
+name: Scientific online services
+
+on:
+  schedule:
+    - cron: '23 3 * * 2,5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  services:
+    name: Gaia, REFCAT2 and JPL smoke tests
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - name: Gaia DR3 TAP query
+        run: |
+          curl --fail-with-body --retry 2 --max-time 30 \
+            --data-urlencode 'REQUEST=doQuery' \
+            --data-urlencode 'LANG=ADQL' \
+            --data-urlencode 'FORMAT=json' \
+            --data-urlencode 'QUERY=SELECT TOP 1 source_id,RA_ICRS,DE_ICRS FROM "I/355/gaiadr3"' \
+            https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync
+      - name: ATLAS REFCAT2 TAP query
+        run: |
+          curl --fail-with-body --retry 2 --max-time 30 \
+            --data-urlencode 'REQUEST=doQuery' \
+            --data-urlencode 'LANG=ADQL' \
+            --data-urlencode 'FORMAT=json' \
+            --data-urlencode 'QUERY=SELECT TOP 1 RA_ICRS,DE_ICRS FROM "J/ApJ/867/105/refcat2"' \
+            https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync
+      - name: JPL Small-Body Identification query
+        run: |
+          curl --fail-with-body --retry 2 --max-time 10 --get \
+            --data-urlencode 'lat=19.826' \
+            --data-urlencode 'lon=-155.474' \
+            --data-urlencode 'alt=4.2' \
+            --data-urlencode 'obs-time=2460000.5' \
+            --data-urlencode 'fov-ra-center=12-00-00' \
+            --data-urlencode 'fov-dec-center=+20-00-00' \
+            --data-urlencode 'fov-ra-hwidth=0.1' \
+            --data-urlencode 'fov-dec-hwidth=0.1' \
+            --data-urlencode 'two-pass=true' \
+            https://ssd-api.jpl.nasa.gov/sb_ident.api
