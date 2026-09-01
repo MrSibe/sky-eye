@@ -5,7 +5,7 @@
 ## M0：可信核心与工程基线
 
 - [x] Tauri v2 + React 19 + TypeScript 项目可构建。
-- [x] CFITSIO 多 HDU/压缩读取、Header 诊断、WebGL2 shader 显示和双帧缓存。
+- [x] CFITSIO 多 HDU/压缩读取、Header 诊断、WebGL2 shader 显示，以及 Rust/CPU/GPU 独立按字节 LRU。
 - [x] 建立 Git 基线与 MVP、架构、技术决策文档。
 - [x] 建立 `AstroTime`、`ImageFrame`、`Measurement` 核心类型。
 - [x] SEP Windows/MSVC 编译门禁。
@@ -35,19 +35,19 @@
 - [x] Gaussian-window 迭代质心与 SEP 亚像素孔径测光。
 - [ ] 二维椭圆高斯 PSF 拟合。
 - [ ] 输出 centroid/PSF 不确定度、FWHM、长短轴、方向和 flags。
-- [ ] ATLAS REFCAT2 查询、颜色项和零点稳健拟合。
-- [ ] 多帧星点配准和亚像素重采样。
-- [~] Blink 播放、速度和帧导航已存在；标准 ZScale、Linear/Asinh 和整组拉伸锁定已完成，WCS 背景对齐待实现。
+- [x] ATLAS REFCAT2 查询、颜色项和零点稳健拟合。
+- [~] WCS 对齐 Blink 已在 GPU/Canvas 显示路径实现；真实四帧 corpus 的残差验收仍待完成。
+- [x] Blink 播放、速度、帧导航、标准 ZScale、Linear/Asinh 和整组拉伸锁定。
 - [ ] 测量表、质量控制、接受/拒绝和跨帧目标关联。
 
 验收：合成 Gaussian flux 误差 `< 1%`；真实标准场给出零点残差和异常星；对齐后恒星残差 `< 1 px`。
 
 ## M3：报告与已知天体
 
-- [ ] MPC_ORB JSON 下载、版本管理和本地缓存。
-- [ ] 在线 MPChecker MVP；离线轨道传播器后置。
-- [ ] 已知天体覆盖和测量交叉匹配。
-- [ ] ADES 2022 PSV 数据模型、生成器和 schema/规则校验。
+- [x] MPCORB 下载、本地 `.gz` 导入、版本清单和本地缓存。
+- [~] ERFA 本地二体传播、JPL second-pass 复核、5 秒超时/离线模式和会话缓存已完成；保守空间索引仍待真实 155 万条基准决定是否启用。
+- [x] 已知天体覆盖和测量交叉匹配。
+- [~] ADES 2022 PSV 数据模型和生成器已完成；固定 PSV 已接入固定版本官方 `iau-ades` PSV→XML/schema 门禁，更多提交规则 fixtures 待扩充。
 - [ ] 观测站、设备、滤镜和星表配置。
 - [ ] 工程 SQLite、恢复、审计记录和导出包。
 
@@ -64,7 +64,7 @@
 
 ## 当前下一个切片
 
-1. 使用 Astrometrica 教程图和不同仪器真实 FITS 验证星对投票，建立 golden regression data。
-2. 评估 `tetra3` Rust 后端和 Astrometry.net sidecar，加入经过统计验证的四星哈希回退。
+1. 扩充已提交的 Pan-STARRS XY54.p10 四帧裁剪 corpus，加入离线 Gaia/REFCAT2 对照目录和 WCS/测光 golden 值。
+2. 在真实四帧 corpus 上验收 WCS Blink 恒星残差、20 帧内存边界和 155 万条 MPCORB 性能。
 3. 实现残差覆盖层、参考星手工删除和重新拟合。
 4. 增加 VizieR 磁盘缓存、设备配置持久化与完整归算 provenance。

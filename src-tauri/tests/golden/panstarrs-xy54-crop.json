@@ -1,0 +1,39 @@
+{
+  "dataset": "Pan-STARRS IPP CHIP XY54.p10 public regression crop",
+  "source_context": "CSASC tutorial data supplied by the repository owner",
+  "redistribution_basis": "Repository owner explicitly authorized copying these tutorial files into Sky Eye on 2026-09-01; upstream license was not independently verified.",
+  "generator": "src-tauri/examples/crop_golden.rs",
+  "crop_fits_coordinates": {
+    "x1": 700,
+    "x2": 1723,
+    "y1": 705,
+    "y2": 1728,
+    "convention": "one-based inclusive CFITSIO image section"
+  },
+  "frames": [
+    {
+      "file": "xy54-p10-crop/frame-01.fits",
+      "source_file": "o60934g0354o.2320159.ch.2929682.XY54.p10.fits",
+      "source_sha256": "bfdd867550d43a6b16353e8daeacc3bc61ac987a7350d9f5fff02d26d132bffd",
+      "sha256": "fa227b5108e0b56c496515a1594f8878d7f85b7b4aa19f80c35094732f556b14"
+    },
+    {
+      "file": "xy54-p10-crop/frame-02.fits",
+      "source_file": "o60934g0371o.2320176.ch.2929699.XY54.p10.fits",
+      "source_sha256": "47e8dcaffecf04b1e7656c87f24cc077203a9020a13f6596ec9e9edf3bfff4fd",
+      "sha256": "c2888311031d6b17b0c9def47d7f28e3bea9d281399dfc2b3af4c04681df9524"
+    },
+    {
+      "file": "xy54-p10-crop/frame-03.fits",
+      "source_file": "o60934g0388o.2320193.ch.2929716.XY54.p10.fits",
+      "source_sha256": "016ad907e30114e2be02ed7d55175542c1cfb002d021af53f84ddb5faf4de49c",
+      "sha256": "d8b8801e1fe64b892d1c3caf1d270b7c1950a7bca673b265d123490bc0bb75cb"
+    },
+    {
+      "file": "xy54-p10-crop/frame-04.fits",
+      "source_file": "o60934g0405o.2320210.ch.2929733.XY54.p10.fits",
+      "source_sha256": "58de741062664d3f04f1baa5c5be4792ab70ed13f2b72f7c16b59a687fea0a69",
+      "sha256": "f993e1bfcba10a6f52dfef724a96ff05cae5ec9d4b7be85fc9cc422ed6d166ce"
+    }
+  ]
+}

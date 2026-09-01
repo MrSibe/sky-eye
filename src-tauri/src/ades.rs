@@ -207,6 +207,55 @@ pub fn validate(req: &AdesRequest) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn renders_official_validation_fixture_exactly() {
+        let request = AdesRequest {
+            context: AdesContext {
+                observatory_code: "500".into(),
+                submitter: "Sky Eye Test".into(),
+                observers: vec!["Test Observer".into()],
+                measurers: vec!["Test Measurer".into()],
+                telescope: Some("Reflector".into()),
+                telescope_aperture_m: Some(0.4),
+                detector: Some("CCD".into()),
+                software_version: "Sky Eye 0.2.2".into(),
+                position_precision_1e6_deg: true,
+                magnitude_precision_hundredth: true,
+                mpcorb_sha256: None,
+                refcat2_sha256: None,
+            },
+            observations: vec![AdesObservation {
+                perm_id: Some("1".into()),
+                prov_id: None,
+                trk_sub: None,
+                mode: "CCD".into(),
+                obs_time: "2026-01-01T00:00:00Z".into(),
+                ra_deg: 12.345678,
+                dec_deg: -23.456789,
+                rms_ra_arcsec: Some(0.12),
+                rms_dec_arcsec: Some(0.14),
+                ast_cat: "Gaia3".into(),
+                mag: Some(18.42),
+                rms_mag: Some(0.03),
+                band: Some("r".into()),
+                filter: Some("r".into()),
+                phot_cat: Some("ATLAS2".into()),
+                phot_ap_arcsec: Some(3.5),
+                snr: Some(50.0),
+                seeing_arcsec: Some(2.1),
+                exposure_seconds: Some(60.0),
+                rms_fit_arcsec: Some(0.25),
+                astrometric_reference_stars: Some(42),
+                accepted_wcs: true,
+            }],
+        };
+        assert_eq!(
+            render(&request).expect("valid ADES fixture"),
+            include_str!("../tests/golden/ades-fixed.psv")
+        );
+    }
+
     #[test]
     fn blocks_unaccepted_wcs() {
         let r = AdesRequest {
