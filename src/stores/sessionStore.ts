@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { ByteLru, type ByteLruStats } from '../lib/byteLru'
 import type {
   DetectedStar,
   WCS,
@@ -19,6 +20,7 @@ interface SessionState {
   solveSuccess: boolean
   frames: FrameMeta[]
   framePixels: Record<number, { pixels: Float32Array; width: number; height: number }>
+  pixelCacheStats: ByteLruStats
   currentFrameIndex: number
   isPlaying: boolean
   speedMs: number
@@ -27,6 +29,8 @@ interface SessionState {
   sessionId: number
   /** 闪图预热进度;null 表示已就绪(Ready) */
   blinkPrep: { loaded: number; total: number } | null
+  blinkAlignment: 'raw' | 'wcs'
+  blinkReferenceIndex: number | null
 
   setDetection: (result: DetectionResult) => void
   setSolution: (result: PlateSolveResult) => void
@@ -46,6 +50,8 @@ interface SessionState {
   setPlaying: (playing: boolean) => void
   setSpeedMs: (ms: number) => void
   setBlinkPrep: (prep: { loaded: number; total: number } | null) => void
+  setBlinkAlignment: (mode: 'raw' | 'wcs', referenceIndex?: number) => void
+  invalidateScience: () => void
   resetSession: () => void
 }
 
@@ -53,6 +59,10 @@ interface SessionState {
 const EMPTY_STARS: DetectedStar[] = []
 
 let nextSessionId = 1
+const CPU_PIXEL_BUDGET_BYTES = 256 * 1024 * 1024
+const pixelLru = new ByteLru<number, { pixels: Float32Array; width: number; height: number }>(
+  CPU_PIXEL_BUDGET_BYTES,
+)
 
 export const useSessionStore = create<SessionState>((set) => ({
   detectedStars: [],
@@ -63,12 +73,15 @@ export const useSessionStore = create<SessionState>((set) => ({
   solveSuccess: false,
   frames: [],
   framePixels: {},
+  pixelCacheStats: pixelLru.stats(),
   currentFrameIndex: 0,
   isPlaying: false,
   speedMs: 300,
   frameAnalyses: {},
   sessionId: nextSessionId++,
   blinkPrep: null,
+  blinkAlignment: 'raw',
+  blinkReferenceIndex: null,
 
   setDetection: (result) =>
     set((state) => ({
@@ -130,19 +143,25 @@ export const useSessionStore = create<SessionState>((set) => ({
   setIsDetecting: (v) => set({ isDetecting: v }),
   setIsSolving: (v) => set({ isSolving: v }),
   setFrames: (frames) =>
-    set({
-      frames,
-      frameAnalyses: {},
-      detectedStars: EMPTY_STARS,
-      noise: 0,
-      wcs: null,
-      solveSuccess: false,
-      framePixels: {},
-      currentFrameIndex: 0,
-      isPlaying: false,
-      // 新序列:递增 sessionId,BlinkSet 纹理 key 整体换代
-      sessionId: nextSessionId++,
-      blinkPrep: null,
+    set(() => {
+      pixelLru.clear()
+      return {
+        frames,
+        frameAnalyses: {},
+        detectedStars: EMPTY_STARS,
+        noise: 0,
+        wcs: null,
+        solveSuccess: false,
+        framePixels: {},
+        pixelCacheStats: pixelLru.stats(),
+        currentFrameIndex: 0,
+        isPlaying: false,
+        // 新序列:递增 sessionId,BlinkSet 纹理 key 整体换代
+        sessionId: nextSessionId++,
+        blinkPrep: null,
+        blinkAlignment: 'raw',
+        blinkReferenceIndex: null,
+      }
     }),
   setBlinkState: (blink) =>
     set((state) => ({
@@ -156,33 +175,63 @@ export const useSessionStore = create<SessionState>((set) => ({
       solveSuccess: state.frameAnalyses[blink.current_index]?.solution?.success ?? false,
     })),
   cacheFramePixels: (index, pixels, width, height) =>
-    set((state) => ({
-      framePixels: { ...state.framePixels, [index]: { pixels, width, height } },
-    })),
+    set((state) => {
+      const value = { pixels, width, height }
+      const nextIndex =
+        state.frames.length > 1 ? (state.currentFrameIndex + 1) % state.frames.length : -1
+      const protectedKeys = new Set([state.currentFrameIndex, nextIndex])
+      const evicted = pixelLru.set(index, value, pixels.byteLength, protectedKeys)
+      const framePixels = { ...state.framePixels, [index]: value }
+      for (const key of evicted) delete framePixels[key]
+      return { framePixels, pixelCacheStats: pixelLru.stats() }
+    }),
   setCurrentFrame: (index) =>
-    set((state) => ({
-      currentFrameIndex: index,
-      detectedStars: state.frameAnalyses[index]?.detection?.astrometry_stars ?? EMPTY_STARS,
-      noise: state.frameAnalyses[index]?.detection?.noise ?? 0,
-      wcs: state.frameAnalyses[index]?.solution?.wcs ?? null,
-      solveSuccess: state.frameAnalyses[index]?.solution?.success ?? false,
-    })),
+    set((state) => {
+      pixelLru.get(index)
+      return {
+        currentFrameIndex: index,
+        pixelCacheStats: pixelLru.stats(),
+        detectedStars: state.frameAnalyses[index]?.detection?.astrometry_stars ?? EMPTY_STARS,
+        noise: state.frameAnalyses[index]?.detection?.noise ?? 0,
+        wcs: state.frameAnalyses[index]?.solution?.wcs ?? null,
+        solveSuccess: state.frameAnalyses[index]?.solution?.success ?? false,
+      }
+    }),
   setPlaying: (playing) => set({ isPlaying: playing }),
   setSpeedMs: (ms) => set({ speedMs: ms }),
   setBlinkPrep: (prep) => set({ blinkPrep: prep }),
-  resetSession: () =>
+  setBlinkAlignment: (mode, referenceIndex) =>
+    set((state) => ({
+      blinkAlignment: mode,
+      blinkReferenceIndex: mode === 'wcs' ? (referenceIndex ?? state.currentFrameIndex) : null,
+    })),
+  invalidateScience: () =>
     set({
       detectedStars: EMPTY_STARS,
       noise: 0,
       wcs: null,
       solveSuccess: false,
-      frames: [],
-      framePixels: {},
-      currentFrameIndex: 0,
-      isPlaying: false,
-      speedMs: 300,
       frameAnalyses: {},
-      sessionId: nextSessionId++,
-      blinkPrep: null,
+    }),
+  resetSession: () =>
+    set(() => {
+      pixelLru.clear()
+      return {
+        detectedStars: EMPTY_STARS,
+        noise: 0,
+        wcs: null,
+        solveSuccess: false,
+        frames: [],
+        framePixels: {},
+        pixelCacheStats: pixelLru.stats(),
+        currentFrameIndex: 0,
+        isPlaying: false,
+        speedMs: 300,
+        frameAnalyses: {},
+        sessionId: nextSessionId++,
+        blinkPrep: null,
+        blinkAlignment: 'raw',
+        blinkReferenceIndex: null,
+      }
     }),
 }))

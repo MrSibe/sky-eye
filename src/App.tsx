@@ -88,7 +88,6 @@ function App() {
     setFrames,
     setBlinkState,
     cacheFramePixels,
-    setCurrentFrame,
     setDetection,
     setSolution,
     setFrameReduction,
@@ -120,6 +119,7 @@ function App() {
   )
 
   const pixelLoadGeneration = useRef(0)
+  const pixelLoads = useRef(new Map<number, Promise<void>>())
   const viewerRef = useRef<FITSViewerHandle>(null)
   const blinkGenRef = useRef(0)
   const measureInFlight = useRef(false)
@@ -289,29 +289,51 @@ function App() {
       const frame = useSessionStore.getState().frames[index]
       if (!frame) return
       if (useSessionStore.getState().framePixels[index]) return
-      const buffer = await getFramePixelBuffer(index)
-      if (generation !== pixelLoadGeneration.current) return
-      const pixels = new Float32Array(buffer)
-      cacheFramePixels(index, pixels, frame.width, frame.height)
+      const existing = pixelLoads.current.get(index)
+      if (existing) return existing
+      const loading = (async () => {
+        const buffer = await getFramePixelBuffer(index)
+        if (generation !== pixelLoadGeneration.current) return
+        const pixels = new Float32Array(buffer)
+        cacheFramePixels(index, pixels, frame.width, frame.height)
+      })().finally(() => pixelLoads.current.delete(index))
+      pixelLoads.current.set(index, loading)
+      return loading
     },
     [cacheFramePixels],
   )
 
-  // 顺序预热整组 BlinkSet(2/4 帧):第 1 帧已显示,后台逐帧拉取并上传纹理("闪图准备 x/4")
+  // 按 CPU 预算预热:当前帧、播放方向邻帧优先,长序列不再整组常驻。
   const prepareBlinkSet = useCallback(async () => {
     const gen = pixelLoadGeneration.current
-    const total = useSessionStore.getState().frames.length
+    const state = useSessionStore.getState()
+    const total = state.frames.length
     if (total < 2) {
-      useSessionStore.getState().setBlinkPrep(null)
+      state.setBlinkPrep(null)
       return
     }
-    useSessionStore.getState().setBlinkPrep({ loaded: 1, total })
-    for (let index = 1; index < total; index++) {
+    const budget = state.pixelCacheStats.maxBytes
+    const order = Array.from(
+      { length: total },
+      (_, offset) => (state.currentFrameIndex + offset) % total,
+    )
+    const planned: number[] = []
+    let bytes = 0
+    for (const index of order) {
+      const frame = state.frames[index]
+      const frameBytes = frame.width * frame.height * Float32Array.BYTES_PER_ELEMENT
+      if (planned.length > 0 && bytes + frameBytes > budget) break
+      planned.push(index)
+      bytes += frameBytes
+    }
+    state.setBlinkPrep({ loaded: 0, total: planned.length })
+    for (let position = 0; position < planned.length; position++) {
+      const index = planned[position]
       await ensureFramePixels(index, gen)
       if (gen !== pixelLoadGeneration.current) return
       viewerRef.current?.prewarmFrame(index)
       if (gen !== pixelLoadGeneration.current) return
-      useSessionStore.getState().setBlinkPrep({ loaded: index + 1, total })
+      useSessionStore.getState().setBlinkPrep({ loaded: position + 1, total: planned.length })
     }
     if (gen === pixelLoadGeneration.current) {
       useSessionStore.getState().setBlinkPrep(null)
@@ -329,12 +351,26 @@ function App() {
     const gen = ++blinkGenRef.current
     let rafId = 0
     let lastSwitchAt = 0
+    let switching = false
     const loop = (now: number) => {
       if (gen !== blinkGenRef.current) return
-      if (now - lastSwitchAt >= useSessionStore.getState().speedMs) {
-        lastSwitchAt = now // 卡顿后不补 tick
+      if (!switching && now - lastSwitchAt >= useSessionStore.getState().speedMs) {
         const state = useSessionStore.getState()
-        state.setCurrentFrame((state.currentFrameIndex + 1) % state.frames.length)
+        const next = (state.currentFrameIndex + 1) % state.frames.length
+        switching = true
+        void ensureFramePixels(next)
+          .then(() => {
+            if (gen !== blinkGenRef.current) return
+            viewerRef.current?.prewarmFrame(next)
+            useSessionStore.getState().setCurrentFrame(next)
+            lastSwitchAt = performance.now()
+            const following = (next + 1) % state.frames.length
+            void ensureFramePixels(following).then(() => viewerRef.current?.prewarmFrame(following))
+          })
+          .catch((error) => setError(String(error)))
+          .finally(() => {
+            switching = false
+          })
       }
       rafId = requestAnimationFrame(loop)
     }
@@ -345,7 +381,7 @@ function App() {
       // 科学命令仍读 Rust current_frame_index:暂停/停止时同步一次
       void blinkSetFrame(useSessionStore.getState().currentFrameIndex).catch(() => {})
     }
-  }, [frames.length, isPlaying, setCurrentFrame])
+  }, [ensureFramePixels, frames.length, isPlaying, setError])
 
   const handleOpen = useCallback(async () => {
     try {
@@ -366,6 +402,7 @@ function App() {
       setKnownVisible(false)
       manualFrameIndex.current = null
       pixelLoadGeneration.current += 1
+      pixelLoads.current.clear()
       setStretchLimits(null)
 
       const result = await loadFrames(paths)
@@ -456,6 +493,7 @@ function App() {
       setManualQueue([])
       manualFrameIndex.current = null
       pixelLoadGeneration.current += 1
+      pixelLoads.current.clear()
       setStretchLimits(null)
       setLoadingProgress(null)
       setReductionProgress(null)
@@ -605,9 +643,21 @@ function App() {
     }
   }, [measurements, observatory, setError])
   const handleSaveConfig = useCallback(async (config: AppConfig) => {
-    await saveAppConfig(config)
+    const result = await saveAppConfig(config)
     setAppConfig(config)
-    setReductionMessage('软件设置已保存到 config/settings.json。')
+    if (result.scientific_cache_invalidated) {
+      useSessionStore.getState().invalidateScience()
+      setMeasurements((current) =>
+        current.map((measurement) => ({
+          ...measurement,
+          stale: true,
+          stale_reason: '科学设置已变化，需要重新归算',
+        })),
+      )
+      setReductionMessage('科学设置已保存；旧归算与测量结果已失效，请重新归算。')
+    } else {
+      setReductionMessage('软件设置已保存到 config/settings.json。')
+    }
   }, [])
   const handleDeleteMeasurement = useCallback(
     async (id: string) => {
