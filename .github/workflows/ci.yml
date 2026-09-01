@@ -52,6 +52,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
       - name: Check Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
       - name: Clippy
@@ -60,6 +63,7 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
       - name: Validate fixed ADES PSV with official tools
         run: |
+          python -m pip install --upgrade pip setuptools wheel
           python -m pip install "iau-ades @ git+https://github.com/IAU-ADES/ADES-Master.git@39ae5a9b13c37f7256a39b457e04433c854ed4dd"
           psvtoxml.py src-tauri/tests/golden/ades-fixed.psv /tmp/ades-fixed.xml
           valsubmit.py /tmp/ades-fixed.xml
