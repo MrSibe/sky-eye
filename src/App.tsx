@@ -602,6 +602,8 @@ function App() {
       setKnownObjectsByFrame(
         Object.fromEntries(result.frames.map((frame) => [frame.frame_index, frame.objects])),
       )
+      const warnings = [...new Set(result.frames.flatMap((frame) => frame.warnings))]
+      if (warnings.length > 0) setReductionMessage(warnings.join('；'))
       return true
     } catch (e) {
       setError(String(e))

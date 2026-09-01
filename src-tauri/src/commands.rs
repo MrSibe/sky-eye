@@ -2,7 +2,10 @@ use crate::astrometry::{matcher, platesolve};
 use crate::catalog::refcat2::Refcat2Client;
 use crate::catalog::vizier::{GaiaQuery, GaiaQueryResult, VizierClient};
 use crate::core::{AstroTime, FrameId};
-use crate::ephemeris::{angular_distance_arcsec, propagate, EphemerisPoint, Observatory};
+use crate::ephemeris::{
+    angular_distance_arcsec, propagate, propagate_with_context, EphemerisPoint, Observatory,
+    PropagationContext,
+};
 use crate::fits;
 use crate::measurement::{
     normalize_tracklet_designation, CandidateMatch, MatchStatus, MeasureTargetRequest,
@@ -33,6 +36,7 @@ pub struct AppState {
     pub blink_speed_ms: Mutex<u64>,
     pub vizier: VizierClient,
     pub refcat2: Refcat2Client,
+    pub jpl: Arc<crate::ephemeris::jpl::JplClient>,
     pub catalog_cancellations: Mutex<HashMap<String, CancellationToken>>,
     pub pending_measurements: Mutex<HashMap<String, TargetMeasurement>>,
     pub measurements: Mutex<Vec<TargetMeasurement>>,
@@ -50,6 +54,7 @@ impl AppState {
             blink_speed_ms: Mutex::new(300),
             vizier: VizierClient::default(),
             refcat2: Refcat2Client::default(),
+            jpl: Arc::new(crate::ephemeris::jpl::JplClient::default()),
             catalog_cancellations: Mutex::new(HashMap::new()),
             pending_measurements: Mutex::new(HashMap::new()),
             measurements: Mutex::new(Vec::new()),
@@ -1362,6 +1367,8 @@ pub struct KnownObjectSearch {
 pub struct KnownObjectResult {
     pub database: MpcorbManifest,
     pub objects: Vec<EphemerisPoint>,
+    pub source: &'static str,
+    pub warnings: Vec<String>,
 }
 #[tauri::command]
 pub async fn search_known_objects(
@@ -1373,11 +1380,13 @@ pub async fn search_known_objects(
         return Err("radius must be in [0,10] degrees".into());
     }
     let (m, orbits) = active_orbits(&state, mpc_root(&app)?).await?;
+    let settings = crate::storage::load_config(&app)?;
     let online_request = request.clone();
+    let propagation = PropagationContext::new(request.jd_utc, request.station)?;
     let local_objects = tokio::task::spawn_blocking(move || {
         let mut objects: Vec<_> = orbits
             .par_iter()
-            .filter_map(|o| propagate(o, request.jd_utc, request.station).ok())
+            .filter_map(|orbit| propagate_with_context(orbit, &propagation).ok())
             .filter(|p| {
                 angular_distance_arcsec(
                     request.center_ra_deg,
@@ -1397,22 +1406,32 @@ pub async fn search_known_objects(
     })
     .await
     .map_err(|e| format!("known-object worker failed: {e}"))?;
-    let objects = if let Some(station) = online_request.station {
-        match crate::ephemeris::jpl::identify_second_pass(
-            online_request.jd_utc,
-            online_request.center_ra_deg,
-            online_request.center_dec_deg,
-            online_request.radius_deg,
-            station,
-        )
-        .await
+    let mut source = "mpcorb_local";
+    let mut warnings = Vec::new();
+    let objects = if settings.data.jpl_mode == "offline" {
+        warnings.push("JPL 离线模式已启用；当前显示本地 MPCORB 预测".to_string());
+        local_objects
+    } else if let Some(station) = online_request.station {
+        match state
+            .jpl
+            .identify_second_pass(
+                online_request.jd_utc,
+                online_request.center_ra_deg,
+                online_request.center_dec_deg,
+                online_request.radius_deg,
+                station,
+                std::time::Duration::from_secs(settings.data.jpl_timeout_seconds),
+            )
+            .await
         {
             Ok(mut precise) => {
+                source = "jpl_second_pass";
                 precise.truncate(online_request.max_results.unwrap_or(1000).min(5000));
                 precise
             }
             Err(error) => {
                 log::warn!("JPL second-pass unavailable; retaining local predictions: {error}");
+                warnings.push(format!("JPL 在线复核失败，当前显示本地预测：{error}"));
                 local_objects
             }
         }
@@ -1422,6 +1441,8 @@ pub async fn search_known_objects(
     Ok(KnownObjectResult {
         database: m,
         objects,
+        source,
+        warnings,
     })
 }
 
@@ -1443,6 +1464,8 @@ pub struct KnownObjectBatchSearch {
 pub struct KnownObjectFrameResult {
     pub frame_index: usize,
     pub objects: Vec<EphemerisPoint>,
+    pub source: &'static str,
+    pub warnings: Vec<String>,
 }
 #[derive(Debug, Serialize)]
 pub struct KnownObjectBatchResult {
@@ -1470,21 +1493,27 @@ pub async fn search_known_objects_batch(
     let local_frames = frames.clone();
     let station = request.station;
     let limit = request.max_results_per_frame.unwrap_or(1000).min(5000);
+    let start = local_frames
+        .iter()
+        .map(|frame| frame.jd_utc)
+        .fold(f64::INFINITY, f64::min);
+    let end = local_frames
+        .iter()
+        .map(|frame| frame.jd_utc)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let start_context = PropagationContext::new(start, station)?;
+    let end_context = PropagationContext::new(end, station)?;
+    let frame_contexts = local_frames
+        .iter()
+        .map(|frame| PropagationContext::new(frame.jd_utc, station))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut grouped = tokio::task::spawn_blocking(move || {
-        let start = local_frames
-            .iter()
-            .map(|f| f.jd_utc)
-            .fold(f64::INFINITY, f64::min);
-        let end = local_frames
-            .iter()
-            .map(|f| f.jd_utc)
-            .fold(f64::NEG_INFINITY, f64::max);
         let span_minutes = (end - start).abs() * 1440.0;
         let hits: Vec<(usize, EphemerisPoint)> = orbits
             .par_iter()
             .filter_map(|orbit| {
-                let p0 = propagate(orbit, start, station).ok()?;
-                let p1 = propagate(orbit, end, station).ok()?;
+                let p0 = propagate_with_context(orbit, &start_context).ok()?;
+                let p1 = propagate_with_context(orbit, &end_context).ok()?;
                 let padding_deg = (p0.angular_speed_arcsec_min.max(p1.angular_speed_arcsec_min)
                     * span_minutes
                     / 3600.0)
@@ -1509,8 +1538,9 @@ pub async fn search_known_objects_batch(
                 }
                 let exact: Vec<_> = local_frames
                     .iter()
-                    .filter_map(|f| {
-                        let p = propagate(orbit, f.jd_utc, station).ok()?;
+                    .zip(&frame_contexts)
+                    .filter_map(|(f, context)| {
+                        let p = propagate_with_context(orbit, context).ok()?;
                         (angular_distance_arcsec(
                             f.center_ra_deg,
                             f.center_dec_deg,
@@ -1541,6 +1571,8 @@ pub async fn search_known_objects_batch(
                 KnownObjectFrameResult {
                     frame_index: f.frame_index,
                     objects,
+                    source: "mpcorb_local",
+                    warnings: Vec::new(),
                 }
             })
             .collect::<Vec<_>>()
@@ -1548,24 +1580,35 @@ pub async fn search_known_objects_batch(
     .await
     .map_err(|e| format!("known-object batch worker failed: {e}"))?;
     grouped.sort_by_key(|f| f.frame_index);
-    if let Some(station) = station {
+    let settings = crate::storage::load_config(&app)?;
+    if settings.data.jpl_mode == "offline" {
+        for frame in &mut grouped {
+            frame
+                .warnings
+                .push("JPL 离线模式已启用；当前显示本地 MPCORB 预测".to_string());
+        }
+    } else if let Some(station) = station {
         let semaphore = Arc::new(tokio::sync::Semaphore::new(3));
         let mut tasks = tokio::task::JoinSet::new();
         for frame in frames {
             let semaphore = semaphore.clone();
+            let jpl = state.jpl.clone();
+            let timeout = std::time::Duration::from_secs(settings.data.jpl_timeout_seconds);
             tasks.spawn(async move {
                 let _permit = semaphore
                     .acquire_owned()
                     .await
                     .map_err(|error| error.to_string())?;
-                let result = crate::ephemeris::jpl::identify_second_pass(
-                    frame.jd_utc,
-                    frame.center_ra_deg,
-                    frame.center_dec_deg,
-                    frame.radius_deg,
-                    station,
-                )
-                .await;
+                let result = jpl
+                    .identify_second_pass(
+                        frame.jd_utc,
+                        frame.center_ra_deg,
+                        frame.center_dec_deg,
+                        frame.radius_deg,
+                        station,
+                        timeout,
+                    )
+                    .await;
                 Ok::<_, String>((frame.frame_index, result))
             });
         }
@@ -1578,10 +1621,19 @@ pub async fn search_known_objects_batch(
                         .find(|frame| frame.frame_index == frame_index)
                     {
                         frame.objects = precise;
+                        frame.source = "jpl_second_pass";
                     }
                 }
                 Ok(Ok((frame_index, Err(error)))) => {
                     log::warn!("frame {frame_index}: JPL second-pass unavailable; retaining local predictions: {error}");
+                    if let Some(frame) = grouped
+                        .iter_mut()
+                        .find(|frame| frame.frame_index == frame_index)
+                    {
+                        frame
+                            .warnings
+                            .push(format!("JPL 在线复核失败，当前显示本地预测：{error}"));
+                    }
                 }
                 Ok(Err(error)) => log::warn!("JPL refinement task failed: {error}"),
                 Err(error) => log::warn!("JPL refinement task join failed: {error}"),

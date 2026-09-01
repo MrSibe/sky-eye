@@ -42,23 +42,69 @@ pub enum PropagationQuality {
     DegradedTime,
 }
 
+#[derive(Debug, Clone)]
+pub struct PropagationContext {
+    jd_tt: f64,
+    station: Option<Observatory>,
+    samples: [PositionContext; 3],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PositionContext {
+    jd_tt: f64,
+    earth: [f64; 3],
+    observer: [f64; 3],
+}
+
+impl PropagationContext {
+    pub fn new(jd_utc: f64, station: Option<Observatory>) -> Result<Self, String> {
+        let dt = 30.0 / 86_400.0;
+        let mut samples = Vec::with_capacity(3);
+        for sample_utc in [jd_utc - dt, jd_utc, jd_utc + dt] {
+            let (jd_tt, jd_ut1) =
+                time_scales(sample_utc, station.and_then(|value| value.dut1_seconds))?;
+            let ((earth_pv, _), _) = erfars::ephemerides::Epv00(2_400_000.5, jd_tt - 2_400_000.5)
+                .map_err(|_| "ERFA Earth ephemeris failed")?;
+            samples.push(PositionContext {
+                jd_tt,
+                earth: [earth_pv[0], earth_pv[1], earth_pv[2]],
+                observer: station
+                    .map(|value| observer_equatorial(jd_ut1, value))
+                    .unwrap_or([0.0; 3]),
+            });
+        }
+        let samples: [PositionContext; 3] = samples
+            .try_into()
+            .map_err(|_| "failed to prepare propagation samples".to_string())?;
+        Ok(Self {
+            jd_tt: samples[1].jd_tt,
+            station,
+            samples,
+        })
+    }
+}
+
 pub fn propagate(
     record: &OrbitRecord,
     jd_utc: f64,
     station: Option<Observatory>,
 ) -> Result<EphemerisPoint, String> {
-    let (jd_tt, jd_ut1) = time_scales(jd_utc, station.and_then(|value| value.dut1_seconds))?;
-    let (ra, dec, r, delta, mag) = position(record, jd_ut1, jd_tt, station)?;
-    let dt = 30.0 / 86400.0;
-    let (tt0, ut10) = time_scales(jd_utc - dt, station.and_then(|value| value.dut1_seconds))?;
-    let (tt1, ut11) = time_scales(jd_utc + dt, station.and_then(|value| value.dut1_seconds))?;
-    let (ra0, dec0, _, _, _) = position(record, ut10, tt0, station)?;
-    let (ra1, dec1, _, _, _) = position(record, ut11, tt1, station)?;
+    let context = PropagationContext::new(jd_utc, station)?;
+    propagate_with_context(record, &context)
+}
+
+pub fn propagate_with_context(
+    record: &OrbitRecord,
+    context: &PropagationContext,
+) -> Result<EphemerisPoint, String> {
+    let (ra0, dec0, _, _, _) = position(record, context.samples[0])?;
+    let (ra, dec, r, delta, mag) = position(record, context.samples[1])?;
+    let (ra1, dec1, _, _, _) = position(record, context.samples[2])?;
     let dra = wrap_deg(ra1 - ra0) * dec.to_radians().cos() * 3600.0;
     let ddec = (dec1 - dec0) * 3600.0;
     let rate_ra = dra;
     let rate_dec = ddec; // endpoints span one minute
-    let offset = jd_tt - record.epoch_tt_jd;
+    let offset = context.jd_tt - record.epoch_tt_jd;
     Ok(EphemerisPoint {
         designation: record.designation.clone(),
         ra_deg: ra,
@@ -69,7 +115,10 @@ pub fn propagate(
         heliocentric_distance_au: Some(r),
         observer_distance_au: Some(delta),
         predicted_mag: mag,
-        quality: if station.is_some_and(|value| value.dut1_seconds.is_none()) {
+        quality: if context
+            .station
+            .is_some_and(|value| value.dut1_seconds.is_none())
+        {
             PropagationQuality::DegradedTime
         } else {
             PropagationQuality::LocalPrediction
@@ -92,28 +141,18 @@ fn time_scales(jd_utc: f64, dut1_seconds: Option<f64>) -> Result<(f64, f64), Str
 
 fn position(
     record: &OrbitRecord,
-    jd_ut1: f64,
-    jd_tt: f64,
-    station: Option<Observatory>,
+    context: PositionContext,
 ) -> Result<(f64, f64, f64, f64, Option<f64>), String> {
-    let ((earth, _), _) = erfars::ephemerides::Epv00(2_400_000.5, jd_tt - 2_400_000.5)
-        .map_err(|_| "ERFA Earth ephemeris failed")?;
     let mut light = 0.0;
     let mut helio = [0.0; 3];
     let mut geo = [0.0; 3];
     for _ in 0..3 {
-        helio = heliocentric(record, jd_tt - light);
+        helio = heliocentric(record, context.jd_tt - light);
         geo = [
-            helio[0] - earth[0],
-            helio[1] - earth[1],
-            helio[2] - earth[2],
+            helio[0] - context.earth[0] - context.observer[0],
+            helio[1] - context.earth[1] - context.observer[1],
+            helio[2] - context.earth[2] - context.observer[2],
         ];
-        if let Some(s) = station {
-            let o = observer_equatorial(jd_ut1, s);
-            for k in 0..3 {
-                geo[k] -= o[k];
-            }
-        }
         light = norm(geo) / C_AU_PER_DAY;
     }
     let delta = norm(geo);
