@@ -24,15 +24,28 @@ export function DisplaySidebar({
   onFitView,
 }: DisplaySidebarProps) {
   // 精确订阅:currentFrameIndex 每 tick 变化仅刷新本栏,不触发无关字段更新
-  const { frames, currentFrameIndex, speedMs, isPlaying, blinkPrep } = useSessionStore(
+  const {
+    frames,
+    currentFrameIndex,
+    speedMs,
+    isPlaying,
+    blinkPrep,
+    frameAnalyses,
+    blinkAlignment,
+  } = useSessionStore(
     useShallow((s) => ({
       frames: s.frames,
       currentFrameIndex: s.currentFrameIndex,
       speedMs: s.speedMs,
       isPlaying: s.isPlaying,
       blinkPrep: s.blinkPrep,
+      frameAnalyses: s.frameAnalyses,
+      blinkAlignment: s.blinkAlignment,
     })),
   )
+  const canAlign =
+    frames.length >= 2 &&
+    frames.every((_, index) => frameAnalyses[index]?.solution?.status === 'accepted')
 
   const selectFrame = useCallback(async (index: number) => {
     if (useSessionStore.getState().isPlaying) return // 播放中忽略手动切帧
@@ -268,6 +281,28 @@ export function DisplaySidebar({
               className="h-1 w-full accent-sky-primary"
             />
             <span className="w-12 text-right text-caption-mono text-sky-mute">{speedMs} ms</span>
+          </div>
+
+          <div className="mt-3">
+            <label htmlFor="blink-alignment" className="mb-1 block text-caption-mono text-sky-mute">
+              对齐方式
+            </label>
+            <Select
+              id="blink-alignment"
+              value={blinkAlignment}
+              disabled={isPlaying}
+              onChange={(event) => {
+                const mode = event.target.value as 'raw' | 'wcs'
+                if (mode === 'wcs' && !canAlign) return
+                useSessionStore.getState().setBlinkAlignment(mode, currentFrameIndex)
+              }}
+              title={!canAlign ? '整组图片完成并接受 WCS 归算后可用' : undefined}
+            >
+              <option value="raw">原始像素</option>
+              <option value="wcs" disabled={!canAlign}>
+                WCS 参考星对齐
+              </option>
+            </Select>
           </div>
 
           <div className="mt-3 border-t border-sky-hairline pt-2 text-caption-mono text-sky-mute">

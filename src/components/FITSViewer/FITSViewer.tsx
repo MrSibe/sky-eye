@@ -3,6 +3,7 @@ import { useFitsStore } from '../../stores/fitsStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { GaiaCalibrationOverlay, type ManualCalibrationState } from '../ManualCalibration'
 import type { EphemerisPoint, TargetMeasurement } from '../../lib/tauri'
+import type { WCS } from '../../types/phase2'
 import { zscale } from '../../lib/stretch'
 import { createFrameRenderer, type FrameRenderer } from './fitsRenderer'
 
@@ -63,11 +64,7 @@ export function clampImagePan(
   }
 }
 
-function pixelToSky(
-  x: number,
-  y: number,
-  wcs: NonNullable<ReturnType<typeof useSessionStore.getState>['wcs']>,
-) {
+export function pixelToSky(x: number, y: number, wcs: WCS) {
   const dx = x - wcs.crpix1
   const dy = y - wcs.crpix2
   const xi = ((wcs.cd1_1 * dx + wcs.cd1_2 * dy) * Math.PI) / 180
@@ -85,11 +82,7 @@ function pixelToSky(
     dec: (decRadians * 180) / Math.PI,
   }
 }
-function skyToPixel(
-  ra: number,
-  dec: number,
-  wcs: NonNullable<ReturnType<typeof useSessionStore.getState>['wcs']>,
-) {
+export function skyToPixel(ra: number, dec: number, wcs: WCS) {
   const r = (ra * Math.PI) / 180,
     d = (dec * Math.PI) / 180,
     r0 = (wcs.crval1 * Math.PI) / 180,
@@ -146,10 +139,31 @@ export function FITSViewer({
   const currentFrame = useSessionStore((s) => s.framePixels[currentFrameIndex])
   const wcs = useSessionStore((s) => s.wcs)
   const solveSuccess = useSessionStore((s) => s.solveSuccess)
+  const blinkAlignment = useSessionStore((s) => s.blinkAlignment)
+  const blinkReferenceIndex = useSessionStore((s) => s.blinkReferenceIndex)
+  const setBlinkAlignment = useSessionStore((s) => s.setBlinkAlignment)
+  const referenceFrameMeta = useSessionStore((s) =>
+    blinkReferenceIndex == null ? undefined : s.frames[blinkReferenceIndex],
+  )
+  const referenceWcs = useSessionStore((s) =>
+    blinkReferenceIndex == null
+      ? null
+      : (s.frameAnalyses[blinkReferenceIndex]?.solution?.wcs ?? null),
+  )
+  const alignmentActive = blinkAlignment === 'wcs' && !!referenceWcs && !!wcs
 
-  const imageWidth = currentFrame?.width ?? 0
-  const imageHeight = currentFrame?.height ?? 0
+  const sourceWidth = currentFrame?.width ?? 0
+  const sourceHeight = currentFrame?.height ?? 0
+  const imageWidth = alignmentActive ? (referenceFrameMeta?.width ?? 0) : sourceWidth
+  const imageHeight = alignmentActive ? (referenceFrameMeta?.height ?? 0) : sourceHeight
   const hasImage = !!currentFrame
+
+  useEffect(() => {
+    if (blinkAlignment !== 'wcs') return
+    if (blinkReferenceIndex == null || !referenceWcs || !wcs) {
+      setBlinkAlignment('raw')
+    }
+  }, [blinkAlignment, blinkReferenceIndex, referenceWcs, setBlinkAlignment, wcs])
 
   // 命令式 handle:顺序预热期间只上传纹理,不切换显示帧
   useImperativeHandle(
@@ -233,16 +247,48 @@ export function FITSViewer({
       z2: limits.z2,
       stretchMode,
       inverted,
+      alignment:
+        alignmentActive && referenceWcs && wcs
+          ? {
+              reference: referenceWcs,
+              source: wcs,
+              outputWidth: imageWidth,
+              outputHeight: imageHeight,
+            }
+          : undefined,
     })
   }, [
+    alignmentActive,
     currentFrame,
     currentFrameIndex,
     glEpoch,
+    imageHeight,
+    imageWidth,
     inverted,
+    referenceWcs,
     setStretchLimits,
     stretchLimits,
     stretchMode,
+    wcs,
   ])
+
+  const displayToSource = useCallback(
+    (x: number, y: number) => {
+      if (!alignmentActive || !referenceWcs || !wcs) return { x, y }
+      const sky = pixelToSky(x, y, referenceWcs)
+      return skyToPixel(sky.ra, sky.dec, wcs)
+    },
+    [alignmentActive, referenceWcs, wcs],
+  )
+
+  const sourceToDisplay = useCallback(
+    (x: number, y: number) => {
+      if (!alignmentActive || !referenceWcs || !wcs) return { x, y }
+      const sky = pixelToSky(x, y, wcs)
+      return skyToPixel(sky.ra, sky.dec, referenceWcs)
+    },
+    [alignmentActive, referenceWcs, wcs],
+  )
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -275,21 +321,26 @@ export function FITSViewer({
         setCursorMeasurement(null)
         return
       }
-      const pixelX = Math.floor(x)
-      const pixelY = Math.floor(y)
-      if (pixelX >= 0 && pixelX < imageWidth && pixelY >= 0 && pixelY < imageHeight) {
-        const sky = wcs && solveSuccess ? pixelToSky(x, y, wcs) : null
+      const source = displayToSource(x, y)
+      if (!source) {
+        setCursorMeasurement(null)
+        return
+      }
+      const pixelX = Math.floor(source.x)
+      const pixelY = Math.floor(source.y)
+      if (pixelX >= 0 && pixelX < sourceWidth && pixelY >= 0 && pixelY < sourceHeight) {
+        const sky = wcs && solveSuccess ? pixelToSky(source.x, source.y, wcs) : null
         setCursorMeasurement({
-          x,
-          y,
-          value: frame.pixels[pixelY * imageWidth + pixelX],
+          x: source.x,
+          y: source.y,
+          value: frame.pixels[pixelY * sourceWidth + pixelX],
           ...(sky ?? {}),
         })
       } else {
         setCursorMeasurement(null)
       }
     },
-    [currentFrameIndex, imageHeight, imageWidth, solveSuccess, wcs],
+    [currentFrameIndex, displayToSource, solveSuccess, sourceHeight, sourceWidth, wcs],
   )
 
   useEffect(() => {
@@ -343,12 +394,13 @@ export function FITSViewer({
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!measureEnabled || !onMeasure || !imageWidth || !imageHeight) return
       const b = e.currentTarget.getBoundingClientRect()
-      onMeasure(
+      const source = displayToSource(
         ((e.clientX - b.left) * imageWidth) / b.width,
         ((e.clientY - b.top) * imageHeight) / b.height,
       )
+      if (source) onMeasure(source.x, source.y)
     },
-    [imageHeight, imageWidth, measureEnabled, onMeasure],
+    [displayToSource, imageHeight, imageWidth, measureEnabled, onMeasure],
   )
 
   return (
@@ -399,21 +451,24 @@ export function FITSViewer({
           >
             {measurements
               .filter((m) => m.frame_index === currentFrameIndex)
-              .map((m) => (
-                <g key={m.id}>
+              .map((m) => ({ measurement: m, point: sourceToDisplay(m.x, m.y) }))
+              .filter((entry) => entry.point)
+              .map(({ measurement: m, point }) => (
+                <g key={m.id} opacity={m.stale ? 0.45 : 1}>
                   <circle
-                    cx={m.x}
-                    cy={m.y}
+                    cx={point!.x}
+                    cy={point!.y}
                     r={Math.max(4 / zoom, m.aperture_radius_px)}
                     fill="none"
-                    stroke="var(--color-sky-primary)"
+                    stroke={m.stale ? 'var(--color-sky-accent-yellow)' : 'var(--color-sky-primary)'}
                     strokeWidth={1.5 / zoom}
                   />
                 </g>
               ))}
-            {wcs &&
+            {(alignmentActive ? referenceWcs : wcs) &&
               knownObjects.map((o) => {
-                const p = skyToPixel(o.ra_deg, o.dec_deg, wcs)
+                const overlayWcs = alignmentActive ? referenceWcs! : wcs!
+                const p = skyToPixel(o.ra_deg, o.dec_deg, overlayWcs)
                 return p && p.x >= 0 && p.y >= 0 && p.x < imageWidth && p.y < imageHeight ? (
                   <g key={o.designation}>
                     <circle
