@@ -253,6 +253,8 @@ pub struct DataConfig {
     pub known_object_mba_limit_mag: f64,
     pub known_object_tno_limit_mag: f64,
     pub known_object_magnitude_offset: f64,
+    pub jpl_mode: String,
+    pub jpl_timeout_seconds: u64,
 }
 
 impl Default for DataConfig {
@@ -263,6 +265,8 @@ impl Default for DataConfig {
             known_object_mba_limit_mag: 22.0,
             known_object_tno_limit_mag: 20.0,
             known_object_magnitude_offset: 0.0,
+            jpl_mode: "auto".into(),
+            jpl_timeout_seconds: 5,
         }
     }
 }
@@ -516,6 +520,11 @@ fn validate(value: &AppConfig) -> Result<(), String> {
         .any(|mapping| mapping.code == value.report.band)
     {
         return Err("unsupported MPC/ADES report band".into());
+    }
+    if !matches!(value.data.jpl_mode.as_str(), "auto" | "offline")
+        || !(1..=60).contains(&value.data.jpl_timeout_seconds)
+    {
+        return Err("invalid JPL known-object settings".into());
     }
     Ok(())
 }

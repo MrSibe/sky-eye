@@ -1401,6 +1401,34 @@ export function SettingsDialog({
                         }
                       />
                     </Field>
+                    <Field label="JPL 在线复核">
+                      <Select
+                        value={draft.data.jpl_mode}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            data: { ...draft.data, jpl_mode: e.target.value as 'auto' | 'offline' },
+                          })
+                        }
+                      >
+                        <option value="auto">自动（失败回退本地）</option>
+                        <option value="offline">离线（仅 MPCORB）</option>
+                      </Select>
+                    </Field>
+                    <Field label="JPL 超时 · s">
+                      <Input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={draft.data.jpl_timeout_seconds}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            data: { ...draft.data, jpl_timeout_seconds: Number(e.target.value) },
+                          })
+                        }
+                      />
+                    </Field>
                   </div>
                 </section>
                 <section className="border-t border-sky-hairline pt-5">

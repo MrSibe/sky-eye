@@ -196,7 +196,12 @@ export async function searchKnownObjects(request: {
   radius_deg: number
   station?: Observatory
   max_results?: number
-}): Promise<{ database: MpcorbManifest; objects: EphemerisPoint[] }> {
+}): Promise<{
+  database: MpcorbManifest
+  objects: EphemerisPoint[]
+  source: 'jpl_second_pass' | 'mpcorb_local'
+  warnings: string[]
+}> {
   return invoke('search_known_objects', { request })
 }
 export async function searchKnownObjectsBatch(request: {
@@ -211,7 +216,12 @@ export async function searchKnownObjectsBatch(request: {
   max_results_per_frame?: number
 }): Promise<{
   database: MpcorbManifest
-  frames: Array<{ frame_index: number; objects: EphemerisPoint[] }>
+  frames: Array<{
+    frame_index: number
+    objects: EphemerisPoint[]
+    source: 'jpl_second_pass' | 'mpcorb_local'
+    warnings: string[]
+  }>
 }> {
   return invoke('search_known_objects_batch', { request })
 }
@@ -419,6 +429,8 @@ export interface AppConfig {
     known_object_mba_limit_mag: number
     known_object_tno_limit_mag: number
     known_object_magnitude_offset: number
+    jpl_mode: 'auto' | 'offline'
+    jpl_timeout_seconds: number
   }
 }
 export async function getAppConfig(): Promise<AppConfig> {
