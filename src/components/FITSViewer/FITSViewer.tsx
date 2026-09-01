@@ -4,7 +4,7 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { GaiaCalibrationOverlay, type ManualCalibrationState } from '../ManualCalibration'
 import type { EphemerisPoint, TargetMeasurement } from '../../lib/tauri'
 import { zscale } from '../../lib/stretch'
-import { FITSRenderer } from './fitsRenderer'
+import { createFrameRenderer, type FrameRenderer } from './fitsRenderer'
 
 interface FITSViewerProps {
   ref?: React.Ref<FITSViewerHandle>
@@ -122,7 +122,7 @@ export function FITSViewer({
 }: FITSViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const rendererRef = useRef<FITSRenderer | null>(null)
+  const rendererRef = useRef<FrameRenderer | null>(null)
   const [glEpoch, setGlEpoch] = useState(0)
   const isDragging = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
@@ -206,13 +206,15 @@ export function FITSViewer({
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || !hasImage) return
-    const renderer = new FITSRenderer(canvas, () => setGlEpoch((epoch) => epoch + 1))
+    const renderer = createFrameRenderer(canvas, imageWidth, imageHeight, () =>
+      setGlEpoch((epoch) => epoch + 1),
+    )
     rendererRef.current = renderer
     return () => {
       if (rendererRef.current === renderer) rendererRef.current = null
       renderer.dispose()
     }
-  }, [glEpoch, hasImage])
+  }, [glEpoch, hasImage, imageHeight, imageWidth])
 
   // 播放热路径:每 tick 只走 bindTexture + setUniforms + drawArrays,零上传/零编译
   useEffect(() => {

@@ -30,6 +30,8 @@ jobs:
         run: pnpm format:check
       - name: Lint
         run: pnpm lint
+      - name: Test frontend cache and WCS transforms
+        run: pnpm test
       - name: Check application versions
         run: pnpm version:check
       - name: Type-check and build frontend
